@@ -195,7 +195,7 @@ def ReadOrders():
     oOrg.dtFrame.loc[oOrg.dtFrame.Paper == 'VVAR11','Paper'] = 'VVAR3'
 
     oOrg.dtFrame.loc['Date'] = oOrg.dtFrame['Date'].dt.strftime('%d-%m-%Y')
-    oOrg.dtFrame[['Paper', 'Date', 'Value', 'Qty', 'Type', 'Category', 'Fee', 'Company']].to_csv(outputDir+'/operations_3.csv', index=False)
+    oOrg.dtFrame[['Paper', 'Date', 'Value', 'Qty', 'Type', 'Category', 'Fee', 'Company']].to_csv(outputDir+'/operations.csv', index=False)
 
 if __name__ == "__main__":
     start_time = time.time()
