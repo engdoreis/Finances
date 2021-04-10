@@ -1,23 +1,21 @@
 import os
 import re
+from shutil import rmtree
 import pandas as pd 
 from FinanceTools import *
 import pdfplumber
 import numpy as np
 from collections import namedtuple
-
-# root = '/content/drive/MyDrive'
-root = 'd:'
-# drive.mount('/content/drive')
-
-companyMap = CompanyListReader().dtFrame
-companyMap.to_csv(root + '/Investing/map.csv')
+from multiprocessing import Process
+from threading import Thread
+from glob import glob
+import time
 
 def to_float(str, decimal=',', thousand='.'):
     return float(str.replace(thousand,'').replace(decimal,'.'))
 
 class PDFPage:
-    def __init__(self, cmpMap):
+    def __init__(self, outDir, name='default'):
         self.date_re = re.compile(r'\d{2}/\d{2}/\d{4}$')
         self.operation_re = re.compile(r'[\w\d-]+\s(C|V)\s+(?:VISTA|FRACIONARIO)\s(?:\d\d/\d\d)?([\w\d\s./]+?)\s\s+([\w\d\s#]+?)\s(\d+)\s([\d.,]+)\s([\d.,]+)\s(\w)')
         self.liqFee_re = re.compile(r'.*?Taxa de liquida.*?\s+([\d,]+)')
@@ -26,10 +24,10 @@ class PDFPage:
         self.exFee_re = re.compile(r'Execu\w+\s+([\d,]+)')
         self.custodyFee_re = re.compile(r'.*?Taxa de Cust\w+\s+([\d,]+)')
         self.irrf_re = re.compile(r'I.R.R.F.*?base.*?[\d,]+\s([\d,]+)')
-        self.otherFee_re = re.compile(r'Outros\s+([\d,]+)')
-        self.dtFrame = pd.DataFrame(columns=['order', 'Code', 'Date', 'Company', 'Type', 'Category', 'Qty', 'Value', 'Total', 'Sub'])
-        self.cmpMap = cmpMap    
-
+        self.otherFee_re = re.compile(r'Outros\s+([\d,]+)')        
+        self.output = outDir + '/' + name + '.csv'
+        self.dtFrame = pd.DataFrame(columns=['Code', 'Date', 'Company', 'Type', 'Category', 'Qty', 'Value', 'Total', 'Sub'])
+        
     def process(self, page):
         text = page.extract_text()
 
@@ -47,7 +45,7 @@ class PDFPage:
                     category = 'FII'
                     code = code.split(' ')[0]
                 else:
-                    category = 'Stock'          
+                    category = 'Stock'
 
                 line_itens.append(order(code, Date, name, opType, category, int(res.group(4)), to_float(res.group(5)), to_float(res.group(6)), code.split(' ')[0] ))
                 continue
@@ -103,8 +101,18 @@ class PDFPage:
         df['Irrf'] = irrf * df['Total'] / total
         df['otherFee'] = otherFee * df['Total'] / total
         df['Fee'] = df['LiqFee'] + df['EmolFee'] + df['OpFee'] + df['ExFee'] + df['CustodyFee'] + df['Irrf'] + df['otherFee']
-
         self.dtFrame = self.dtFrame.merge(df, how='outer')
+
+    def finish(self):
+        self.dtFrame.to_csv(self.output, index=False, float_format='%.5f')
+
+class OrderOrganizer:
+    def __init__(self, inDir):
+        self.dtFrame = pd.DataFrame(columns=['Code', 'Date', 'Company', 'Type', 'Category', 'Qty', 'Value', 'Total', 'Sub'])
+
+        files = sorted(glob(inDir + '/*.csv'))
+        for file in files:
+            self.dtFrame = self.dtFrame.merge(pd.read_csv(file), how='outer')
 
     def partialMatch(self, row):
         if ('FII' in row['Category']):
@@ -123,50 +131,73 @@ class PDFPage:
                 
         return row
 
-    def finish(self):
+    def finish(self, cmpMap):
+        self.cmpMap = cmpMap
         self.dtFrame = self.dtFrame.merge(self.cmpMap, how='left', on=['Company', 'Sub'])
         self.dtFrame = self.dtFrame.apply(self.partialMatch, axis=1).reset_index(drop=True)
-        pageObj.dtFrame['Date'] = pd.to_datetime(pageObj.dtFrame['Date'], format='%d/%m/%Y')
+        self.dtFrame['Date'] = pd.to_datetime(self.dtFrame['Date'], format='%d/%m/%Y')
         self.dtFrame = self.dtFrame.sort_values('Date').reset_index(drop=True)
         return self.dtFrame
 
-pdf = None
-try:
-    pdf = pdfplumber.open(root+'/Investing/Notas_Clear/161936_NotaCorretagem.pdf')
-except:
-    print('File not exist')
-    if (pdf):
-        pageObj = PDFPage(companyMap)
-    for idx, page in enumerate(pdf.pages[0:]):
-        # print(f'Page {idx}')
-        pageObj.process(page)
-
-    pageObj.finish()
-
-from tqdm import tqdm
-from glob import glob
-import time
-
-directory = root + 'Investing/Notas_Clear'
-pageObj = PDFPage(companyMap)
-files = sorted(glob(directory + '/*.pdf'))
-
-for file in tqdm(files, ncols=100, colour='green'):
-    # print(f'Processing {file}')
+def ReadPages(file, dir):
     pdf = pdfplumber.open(file)
+    pgObj = PDFPage(dir, os.path.basename(file).split('.')[0])
     for page in pdf.pages:
-        pageObj.process(page)
+        pgObj.process(page)
 
-pageObj.finish().head(2)
+    pgObj.finish()
 
-#Gambiarra 1 UNT -> 3 ON
-pageObj.dtFrame.loc[pageObj.dtFrame.Paper == 'VVAR11','Qty'] *= 3
-pageObj.dtFrame.loc[pageObj.dtFrame.Paper == 'VVAR11','Value'] /= 3
-pageObj.dtFrame.loc[pageObj.dtFrame.Paper == 'VVAR11','Sub'] = 'ON'
-pageObj.dtFrame.loc[pageObj.dtFrame.Paper == 'VVAR11','Paper'] = 'VVAR3'
+def ReadOrders():
+    root = 'd:'
+    inputDir = root + 'Investing/Notas_Clear'
+    outputDir = root + 'Investing'
+    tmpDir = outputDir + '/tmpDir'
 
+    rmtree(tmpDir)
+    os.mkdir(tmpDir)
 
-pageObj.dtFrame.loc['Date'] = pageObj.dtFrame['Date'].dt.strftime('%d-%m-%Y')
-pageObj.dtFrame[['Paper', 'Date', 'Value', 'Qty', 'Type', 'Category', 'Fee', 'Company']].to_csv(root+'/Investing/operations_2.csv')
+    # pageObj = PDFPage()
+    files = sorted(glob(inputDir + '/*.pdf'))
+
+    processes = []
+
+    print('Starting pages')
+    for file in files:
+        pd = Process(target=ReadPages, args=(file,tmpDir))
+        processes.append(pd)
+    
+    for pd in processes:
+        pd.start()
+    
+    print('Getting tickers names...', end='\r')
+
+    companyListReader = CompanyListReader()
+    print('Getting tickers names...Done')
+
+    for pd in processes:
+        pd.join()
+
+    print('Pages done')
+    print('Tickers merging...', end='\r')
+    companyMap = companyListReader.dtFrame
+    companyMap.to_csv(outputDir + '/map.csv')
+    
+    oOrg = OrderOrganizer(tmpDir)
+    oOrg.finish(companyMap)
+
+    print('Tickers merging...Done')
+    #Gambiarra 1 UNT -> 3 ON
+    oOrg.dtFrame.loc[oOrg.dtFrame.Paper == 'VVAR11','Qty'] *= 3
+    oOrg.dtFrame.loc[oOrg.dtFrame.Paper == 'VVAR11','Value'] /= 3
+    oOrg.dtFrame.loc[oOrg.dtFrame.Paper == 'VVAR11','Sub'] = 'ON'
+    oOrg.dtFrame.loc[oOrg.dtFrame.Paper == 'VVAR11','Paper'] = 'VVAR3'
+
+    oOrg.dtFrame.loc['Date'] = oOrg.dtFrame['Date'].dt.strftime('%d-%m-%Y')
+    oOrg.dtFrame[['Paper', 'Date', 'Value', 'Qty', 'Type', 'Category', 'Fee', 'Company']].to_csv(outputDir+'/operations.csv', index=False)
+
+if __name__ == "__main__":
+    start_time = time.time()
+    ReadOrders()
+    print("--- %s seconds ---" % (time.time() - start_time))
 
 

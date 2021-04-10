@@ -5,14 +5,18 @@ import numpy as np
 
 class PriceReader:
   def __init__(self, stockList, startDate='01-01-2018'):
-    self.df = self.readData(stockList, startDate).reset_index()
+    self.stockList = stockList
+    self.startDate = startDate
+    self.fillDate = dt.datetime.today().strftime('%m-%d-%Y')
+
+  def load(self):
+    self.df = self.readData(self.stockList, self.startDate).reset_index()
     self.df.columns = self.df.columns.str.replace('\.SA','')
     # display(self.df.head())
     self.df = self.df.set_index('Date')
-    self.fillDate = dt.datetime.today().strftime('%m-%d-%Y')
 
     indexList = ['^BVSP', '^GSPC', 'BRLUSD=X']
-    self.brlIndex = self.readIndexData(indexList, startDate).reset_index()
+    self.brlIndex = self.readIndexData(indexList, self.startDate).reset_index()
     self.brlIndex.columns = ['Date', 'IBOV', 'S&P500', 'USD']
     self.brlIndex = self.brlIndex.set_index('Date')
     # display(self.brlIndex)
@@ -78,13 +82,12 @@ class DividendReader:
     }
 
   def __init__(self, dataFrame):
-    
-    paperList = dataFrame[dataFrame['Categoria'] == 'Stock']['Codigo'].unique()
-    self.df = self.loadData(paperList, self.stockUrl)
+    self.stockList = dataFrame[dataFrame['Categoria'] == 'Stock']['Codigo'].unique()
+    self.fiiList = dataFrame[dataFrame['Categoria'] == 'FII']['Codigo'].unique()
 
-    paperList = dataFrame[dataFrame['Categoria'] == 'FII']['Codigo'].unique()    
-    self.df = self.df.append(self.loadData(paperList, self.fiiUrl))
-
+  def load(self):
+    self.df = self.loadData(self.stockList, self.stockUrl)
+    self.df = self.df.append(self.loadData(self.fiiList, self.fiiUrl))
     self.df = self.df.sort_values(by=['Data', 'Codigo'])
     self.df.set_index("Data", inplace = True)
     self.df = self.df[['Codigo', 'Valor', 'Data de Pagamento']]
@@ -148,9 +151,11 @@ class YfinanceReader(DividendReader):
 #   -------------------------------------------------------------------------------------------------
 
 class SplitsReader:
-  def __init__(self, dataFrame):    
-    paperList = dataFrame[dataFrame['Categoria'] == 'Stock']['Codigo'].unique()
-    self.df = self.loadData(paperList)
+  def __init__(self, dataFrame):
+    self.paperList = dataFrame[dataFrame['Categoria'] == 'Stock']['Codigo'].unique()
+  
+  def load(self):
+    self.df = self.loadData(self.paperList)
     self.df = self.df.sort_values(by=['Data', 'Codigo'])
     self.df.set_index("Data", inplace = True)
 
