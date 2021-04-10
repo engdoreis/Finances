@@ -1,4 +1,4 @@
-import os
+import os, sys
 import re
 from shutil import rmtree
 import pandas as pd 
@@ -139,22 +139,23 @@ class OrderOrganizer:
         self.dtFrame = self.dtFrame.sort_values('Date').reset_index(drop=True)
         return self.dtFrame
 
-def ReadPages(file, dir):
-    pdf = pdfplumber.open(file)
-    pgObj = PDFPage(dir, os.path.basename(file).split('.')[0])
+def ReadPages(file, dir_):
+    pdf = pdfplumber.open(file, password='371')
+    pgObj = PDFPage(dir_, os.path.basename(file).split('.')[0])
     for page in pdf.pages:
         pgObj.process(page)
 
     pgObj.finish()
 
-def ReadOrders():
-    root = 'd:'
-    inputDir = root + 'Investing/Notas_Clear'
-    outputDir = root + 'Investing'
+def ReadOrders(indir='d:/Investing/Notas_Clear', outfile='operations.csv'):
+    inputDir = indir
+    outputDir = indir + '/..'
     tmpDir = outputDir + '/tmpDir'
 
-    rmtree(tmpDir)
-    os.mkdir(tmpDir)
+    try:
+        rmtree(tmpDir)
+    finally:
+        os.mkdir(tmpDir)
 
     # pageObj = PDFPage()
     files = sorted(glob(inputDir + '/*.pdf'))
@@ -163,25 +164,24 @@ def ReadOrders():
 
     print('Starting pages')
     for file in files:
-        pd = Process(target=ReadPages, args=(file,tmpDir))
-        processes.append(pd)
-    
-    for pd in processes:
-        pd.start()
-    
+        processes.append(Process(target=ReadPages, args=(file,tmpDir)))
+
+    for pcs in processes:
+        pcs.start()
+
     print('Getting tickers names...', end='\r')
 
     companyListReader = CompanyListReader()
     print('Getting tickers names...Done')
 
-    for pd in processes:
-        pd.join()
+    for pcs in processes:
+        pcs.join()
 
     print('Pages done')
     print('Tickers merging...', end='\r')
     companyMap = companyListReader.dtFrame
     companyMap.to_csv(outputDir + '/map.csv')
-    
+
     oOrg = OrderOrganizer(tmpDir)
     oOrg.finish(companyMap)
 
@@ -191,13 +191,37 @@ def ReadOrders():
     oOrg.dtFrame.loc[oOrg.dtFrame.Paper == 'VVAR11','Value'] /= 3
     oOrg.dtFrame.loc[oOrg.dtFrame.Paper == 'VVAR11','Sub'] = 'ON'
     oOrg.dtFrame.loc[oOrg.dtFrame.Paper == 'VVAR11','Paper'] = 'VVAR3'
-
     oOrg.dtFrame.loc['Date'] = oOrg.dtFrame['Date'].dt.strftime('%d-%m-%Y')
-    oOrg.dtFrame[['Paper', 'Date', 'Value', 'Qty', 'Type', 'Category', 'Fee', 'Company']].to_csv(outputDir+'/operations.csv', index=False)
+
+    tempFile = outputDir + '/tmp_' + outfile
+    outPath = outputDir + '/' + outfile
+    oOrg.dtFrame[['Paper', 'Date', 'Value', 'Qty', 'Type', 'Category', 'Fee', 'Company']].to_csv(tempFile, index=False)
+
+    try:
+        existentDF = pd.read_csv(outPath)
+        outDF = pd.read_csv(tempFile)
+        existentDF=existentDF[existentDF['Date'].astype(bool)].dropna()
+
+        diff = outDF.merge(existentDF, how='outer', on=['Date', 'Value', 'Qty', 'Fee', 'Company'], suffixes=['','_'], indicator=True)
+        diff = diff[diff['_merge'] != 'both']
+        diff = diff.iloc[:,:8]
+        
+        existentDF.append(diff).to_csv(outPath, index=False)
+        os.remove(tempFile)
+    except:
+        os.rename(tempFile, outPath)
+        
 
 if __name__ == "__main__":
-    start_time = time.time()
-    ReadOrders()
-    print("--- %s seconds ---" % (time.time() - start_time))
+    # start_time = time.time()
+    indir='d:/Investing/Notas_Clear'
+    outfile='operations.csv'
+    if(len(sys.argv) > 2):
+        indir = str(sys.argv[1])
+        outfile = str(sys.argv[2])
+
+    ReadOrders(indir, outfile)
+
+    # print("--- %s seconds ---" % (time.time() - start_time))
 
 
