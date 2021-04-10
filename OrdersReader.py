@@ -6,8 +6,10 @@ from FinanceTools import *
 import pdfplumber
 import numpy as np
 from collections import namedtuple
-from multiprocessing import Process, Lock
+from multiprocessing import Process
 from threading import Thread
+from glob import glob
+import time
 
 def to_float(str, decimal=',', thousand='.'):
     return float(str.replace(thousand,'').replace(decimal,'.'))
@@ -136,10 +138,6 @@ class OrderOrganizer:
         self.dtFrame['Date'] = pd.to_datetime(self.dtFrame['Date'], format='%d/%m/%Y')
         self.dtFrame = self.dtFrame.sort_values('Date').reset_index(drop=True)
         return self.dtFrame
-
-from tqdm import tqdm
-from glob import glob
-import time
 
 def ReadPages(file, dir):
     pdf = pdfplumber.open(file)
