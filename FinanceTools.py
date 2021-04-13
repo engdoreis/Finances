@@ -46,9 +46,11 @@ class PriceReader:
     if(date == None):
       return self.df.iloc[-1][code]
 
-    date = self.checkLastAvailable(self.df, date)
-    return self.df.loc[date][code]
-  
+    available, date = self.checkLastAvailable(self.df, date)
+    if available:
+      return self.df.loc[date][code] 
+    return self.df.iloc[0][code] 
+
   def getIndexHistory(self, code, end):
     ret = self.brlIndex.loc[:end][code]
     return ret.dropna()
@@ -57,17 +59,21 @@ class PriceReader:
     if(date == None):
       return self.brlIndex.iloc[-1][code]
 
-    date = self.checkLastAvailable(self.brlIndex, date)
-    return self.brlIndex.loc[date][code]
+    available,date = self.checkLastAvailable(self.brlIndex, date)
+    if available:
+      return self.brlIndex.loc[date][code]
+    return self.brlIndex.iloc[0][code]
 
-  def checkLastAvailable(self, dtframe, date):
-    date = pd.to_datetime(date)
+  def checkLastAvailable(self, dtframe, loockDate):
+    date = pd.to_datetime(loockDate)
     day = pd.Timedelta(1, unit='d')
-    #Look for last availabe date
+    #Look for last available date
 
     while(not date in dtframe.index):
       date = date - day
-    return date
+      if(date < dtframe.index[0]):
+        return False,0
+    return True,date
 
 #   -------------------------------------------------------------------------------------------------
 
