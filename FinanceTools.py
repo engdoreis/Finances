@@ -232,8 +232,7 @@ class TableAccumulator:
 #Class to calculate the profit or loss considering day trade rules.
 class Profit:
   def __init__(self):
-    self.pm = 0;
-    self.amount = 0;
+    self.pm = self.amount = 0
   
   def DayTrade(self, row):
     profit = 0
@@ -257,8 +256,7 @@ class Profit:
     purchaseCount = len(purchaseDf)
     
     if(sellCount == 0):
-      dayGroup['Profit'] = 0
-      dayGroup['DayTrade'] = 0
+      dayGroup['Profit'] = dayGroup['DayTrade'] = 0
       return dayGroup
      
     if(purchaseCount == 0):
@@ -268,8 +266,7 @@ class Profit:
 
     # Day trade detected
     # print('Day Trade detected\n', dayGroup)
-    self.pm = 0;
-    self.amount = 0;
+    self.pm = self.amount = 0
     return dayGroup.apply(self.DayTrade, axis=1)
 
 #   -------------------------------------------------------------------------------------------------
@@ -314,7 +311,7 @@ class PerformanceBlueprint:
 
   def calc(self):
     if (not self.df.empty):
-      ptf = self.pt.dtframe;
+      ptf = self.pt.dtframe
       self.equity      = (ptf['Cotacao'] * ptf['Quantidade']).sum()
       self.cost        = ptf['Custo'].sum()
       self.realizedProfit = self.df.loc[self.df.Tipo == 'Venda', 'Profit'].sum()
@@ -405,10 +402,10 @@ class Taxation:
       # print('Swingtrade')
       self.swingTradeTable = self.CalcTaxes(taxDF, stockType)
 
-    taxdayTradeDF = self.DayTrade(stockType)
-    if(len(taxdayTradeDF) > 0): 
-      # print('Daytrade')
-      self.dayTradeTable = self.CalcTaxes(taxdayTradeDF, stockType, True)
+      taxdayTradeDF = self.DayTrade(stockType)
+      if(len(taxdayTradeDF) > 0): 
+        # print('Daytrade')
+        self.dayTradeTable = self.CalcTaxes(taxdayTradeDF, stockType, True)
 
 
   def CalcTaxes(self, newDF, stockType, isDaytrade=False):
