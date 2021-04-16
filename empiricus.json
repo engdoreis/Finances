@@ -1,0 +1,127 @@
+{
+    "BuyValue":"4400",
+    "BuyDay"  :"01",
+    "StartDate":"2018-03-01",
+    "stocks": [
+        {
+            "Ticker"        :"B3SA3",
+            "Participation" :"0.035",
+            "EntryDate":"2020-07-07",
+            "Category":"Stock"
+        },
+        {
+            "Ticker"        :"BPAN4",
+            "Participation" :"0.08",
+            "EntryDate":"2019-10-23",
+            "Category":"Stock"
+        },
+        {
+            "Ticker"        :"BPAC11",
+            "Participation" :"0.04",
+            "EntryDate":"2020-09-23",
+            "Category":"Stock"
+        },
+        {
+            "Ticker"        :"CIEL3",
+            "Participation" :"0.02",
+            "EntryDate":"2021-02-05",
+            "Category":"Stock"
+        },
+        {
+            "Ticker"        :"COCE5",
+            "Participation" :"0.035",
+            "EntryDate":"2020-05-07",
+            "Category":"Stock"
+        },
+        {
+            "Ticker"        :"CSAN3",
+            "Participation" :"0.10",
+            "EntryDate":"2021-03-08",
+            "Category":"Stock"
+        },
+        {
+            "Ticker"        :"DIRR3",
+            "Participation" :"0.035",
+            "EntryDate":"2021-04-01",
+            "Category":"Stock"
+        },
+        {
+            "Ticker"        :"ENEV3",
+            "Participation" :"0.05",
+            "EntryDate":"2017-10-11",
+            "Category":"Stock"
+        },
+        {
+            "Ticker"        :"JPSA3",
+            "Participation" :"0.05",
+            "EntryDate":"2019-07-31",
+            "Category":"Stock"
+        },
+        {
+            "Ticker"        :"LAME4",
+            "Participation" :"0.06",
+            "EntryDate":"2020-06-22",
+            "Category":"Stock"
+        },
+        {
+            "Ticker"        :"LJQQ3",
+            "Participation" :"0.08",
+            "EntryDate":"2020-12-07",
+            "Category":"Stock"
+        },
+        {
+            "Ticker"        :"MGLU3",
+            "Participation" :"0.03",
+            "EntryDate":"2019-12-04",
+            "Category":"Stock"
+        },
+        {
+            "Ticker"        :"CASH3",
+            "Participation" :"0.04",
+            "EntryDate":"2021-01-20",
+            "Category":"Stock"
+        },
+        {
+            "Ticker"        :"MTRE3",
+            "Participation" :"0.035",
+            "EntryDate":"2020-06-04",
+            "Category":"Stock"
+        },        
+        {
+            "Ticker"        :"NTCO3",
+            "Participation" :"0.06",
+            "EntryDate":"2020-08-26",
+            "Category":"Stock"
+        },        
+        {
+            "Ticker"        :"OIBR3",
+            "Participation" :"0.06",
+            "EntryDate":"2019-08-14",
+            "Category":"Stock"
+        },
+        {
+            "Ticker"        :"SAPR11",
+            "Participation" :"0.02",
+            "EntryDate":"2017-11-22",
+            "Category":"Stock"
+        },        
+        {
+            "Ticker"        :"VALE3",
+            "Participation" :"0.09",
+            "EntryDate":"2020-04-27",
+            "Category":"Stock"
+        },                
+        {
+            "Ticker"        :"YDUQ3",
+            "Participation" :"0.02",
+            "EntryDate":"2020-02-26",
+            "Category":"Stock"
+        },
+        {
+            "Ticker"        :"RRRP3",
+            "Participation" :"0.03",
+            "EntryDate":"2021-04-07",
+            "Category":"Stock"
+        }
+    ]
+}

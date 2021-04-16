@@ -1,0 +1,43 @@
+{
+    "BuyValue":"4400",
+    "BuyDay"  :"01",
+    "StartDate":"2018-03-01",
+    "stocks": [
+        {
+            "Ticker"        :"ITSA4",
+            "Participation" :"0.035",
+            "EntryDate":"2021-03-22",
+            "Category":"Stock"
+        },
+        {
+            "Ticker"        :"PRIO3",
+            "Participation" :"0.08",
+            "EntryDate":"2021-03-22",
+            "Category":"Stock"
+        },
+        {
+            "Ticker"        :"MRVE3",
+            "Participation" :"0.04",
+            "EntryDate":"2021-03-22",
+            "Category":"Stock"
+        },
+        {
+            "Ticker"        :"LCAM3",
+            "Participation" :"0.02",
+            "EntryDate":"2021-03-22",
+            "Category":"Stock"
+        },
+        {
+            "Ticker"        :"DMVF3",
+            "Participation" :"0.035",
+            "EntryDate":"2021-03-22",
+            "Category":"Stock"
+        },
+        {
+            "Ticker"        :"BRSR6",
+            "Participation" :"0.10",
+            "EntryDate":"2021-03-22",
+            "Category":"Stock"
+        }
+    ]
+}
