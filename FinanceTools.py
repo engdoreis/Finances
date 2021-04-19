@@ -311,15 +311,22 @@ class Portifolio:
         self.dtframe['Lucro'] = self.dtframe['Rentabilidade'] + self.dtframe['Proventos']
         self.dtframe['%R'] = self.dtframe['Rentabilidade'] / self.dtframe['Custo'] *100
         self.dtframe['%R+d'] = self.dtframe['Lucro'] / self.dtframe['Custo'] * 100
+        self.dtframe['Alocacao'] = (self.dtframe['Valor'] / self.dtframe['Valor'].sum()) * 100
         self.dtframe = self.dtframe.replace([np.inf, -np.inf], np.nan).fillna(0)
 
-        self.dtframe = self.dtframe[['Ativo', 'PM', 'Cotacao', 'Quantidade', 'Custo', 'Valor', 'Proventos', 'Rentabilidade', 'Lucro', '%R', '%R+d']]
+        self.dtframe = self.dtframe[['Ativo', 'PM', 'Cotacao', 'Quantidade', 'Custo', 'Valor', 'Proventos', 'Rentabilidade', 'Lucro', '%R', '%R+d', 'Alocacao']]
         self.dtframe.set_index('Ativo', inplace=True)
         self.format = {'Cotacao': 'R$ {:,.2f}', 'PM': 'R$ {:.2f}', 'Quantidade': '{:>n}', 'Custo': 'R$ {:,.2f}', 'Valor': 'R$ {:,.2f}', 'Proventos': 'R$ {:,.2f}',\
-                                    'Rentabilidade': 'R$ {:,.2f}', 'Lucro': 'R$ {:,.2f}', '%R': '{:,.2f}%', '%R+d': '{:,.2f}%'}
+                                    'Rentabilidade': 'R$ {:,.2f}', 'Lucro': 'R$ {:,.2f}', '%R': '{:,.2f}%', '%R+d': '{:,.2f}%', 'Alocacao': '{:,.2f}%'}
 
     def show(self):
-        return self.dtframe.style.applymap(color_negative_red).format(self.format)
+        fdf = self.dtframe
+        # fdf.loc['Total', 'Custo'] = fdf['Custo'].sum()
+        # fdf.loc['Total', 'Valor'] = fdf['Valor'].sum()
+        # fdf.loc['Total', 'Rentabilidade'] = fdf['Rentabilidade'].sum()
+        # fdf.fillna(' ', inplace=True)
+        return fdf.style.applymap(color_negative_red).format(self.format)
+
 #     -------------------------------------------------------------------------------------------------
 class PerformanceBlueprint:
     def __init__(self, priceReader, dataframe, date):
@@ -567,9 +574,7 @@ def clear2018Cost(row):
     return row['Despesas']
 
 def color_negative_red(val):
-        return 'color: %s' % ('red' if val < 0 else 'green')
-
-
+    return 'color: %s' % ('red' if val < 0 else 'green')
 
 if __name__ == "__main__":
     prcReader = PriceReader(None, ['EA', 'CCJ'] )
