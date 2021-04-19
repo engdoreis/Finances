@@ -34,7 +34,7 @@ class PriceReader:
         self.fillDate = date
 
     def fillCurrentValue(self, row):
-        row['Cotacao'] = self.getCurrentValue(row['Ativo'], self.fillDate)
+        row['PRICE'] = self.getCurrentValue(row['Ativo'], self.fillDate)
         return row
 
     def readData(self, code, startDate='01-01-2018'):
@@ -97,10 +97,10 @@ class DividendReader:
         }
 
     def __init__(self, dataFrame):
-        self.brTickerList = dataFrame[dataFrame['Categoria'] == 'Ação']['Codigo'].unique()
-        self.usTickerList = dataFrame[dataFrame['Categoria'] == 'Stock']['Codigo'].unique()
-        self.fiiList = dataFrame[dataFrame['Categoria'] == 'FII']['Codigo'].unique()
-        self.df = pd.DataFrame(columns=['Codigo', 'Valor', 'Data de Pagamento'])
+        self.brTickerList = dataFrame[dataFrame['TYPE'] == 'Ação']['SYMBOL'].unique()
+        self.usTickerList = dataFrame[dataFrame['TYPE'] == 'STOCK']['SYMBOL'].unique()
+        self.fiiList = dataFrame[dataFrame['TYPE'] == 'FII']['SYMBOL'].unique()
+        self.df = pd.DataFrame(columns=['SYMBOL', 'PRICE', 'Data de Pagamento'])
 
     def load(self):
         if(len(self.brTickerList) > 0):
@@ -110,9 +110,9 @@ class DividendReader:
             self.df = self.df.append(self.loadData(self.fiiList, self.fiiUrl))
 
         if(not self.df.empty):
-            self.df = self.df.sort_values(by=['Data', 'Codigo'])
+            self.df = self.df.sort_values(by=['DATE', 'SYMBOL'])
             self.df.set_index("Data", inplace = True)
-            self.df = self.df[['Codigo', 'Valor', 'Data de Pagamento']]
+            self.df = self.df[['SYMBOL', 'PRICE', 'Data de Pagamento']]
             # display(self.df.tail(20))
 
     def loadData(self, paperList, baseUrl):
@@ -127,30 +127,30 @@ class DividendReader:
 
             rawTable = pd.read_html(r.text, thousands='.',decimal=',')[0]
             if('fii' in baseUrl):
-                rawTable.columns = ['Data', 'Tipo', 'Data de Pagamento', 'Valor'] 
+                rawTable.columns = ['DATE', 'OPERATION', 'Data de Pagamento', 'PRICE'] 
 
-            rawTable['Codigo'] = paper
+            rawTable['SYMBOL'] = paper
             if('Por quantas ações' in rawTable.columns):
-                rawTable['Valor'] /= rawTable['Por quantas ações']
+                rawTable['PRICE'] /= rawTable['Por quantas ações']
                 # Discount a taxe of 15% when is JCP (Juros sobre capital proprio)
-                rawTable['Valor'] = np.where(rawTable['Tipo'] == 'DIVIDENDO',    rawTable['Valor'],    rawTable['Valor'] * 0.85 )
+                rawTable['PRICE'] = np.where(rawTable['OPERATION'] == 'DIVIDENDO',    rawTable['PRICE'],    rawTable['PRICE'] * 0.85 )
                 
 
-            rawTable = rawTable[['Codigo', 'Data','Valor', 'Data de Pagamento']]
+            rawTable = rawTable[['SYMBOL', 'DATE','PRICE', 'Data de Pagamento']]
 
             rawTable['Data de Pagamento'] = np.where(rawTable['Data de Pagamento'] == '-',\
-                            rawTable['Data'], rawTable['Data de Pagamento'])
+                            rawTable['DATE'], rawTable['Data de Pagamento'])
             
             rawTable['Data de Pagamento'] = pd.to_datetime(rawTable['Data de Pagamento'], format='%d/%m/%Y')
-            rawTable['Data'] = pd.to_datetime(rawTable['Data'], format='%d/%m/%Y')
+            rawTable['DATE'] = pd.to_datetime(rawTable['DATE'], format='%d/%m/%Y')
 
             # display(rawTable.tail())
             tb = tb.append(rawTable)
         return tb
 
     def getPeriod(self, paper, fromDate, toDate):
-        filtered = self.df[self.df['Codigo'] == paper].loc[fromDate:toDate]
-        return filtered[['Codigo', 'Valor']]
+        filtered = self.df[self.df['SYMBOL'] == paper].loc[fromDate:toDate]
+        return filtered[['SYMBOL', 'PRICE']]
     # display(tb)
 
 #     -------------------------------------------------------------------------------------------------
@@ -162,21 +162,21 @@ class YfinanceReader(DividendReader):
         res = pd.DataFrame()
         for paper in paperList:
             data = pd.DataFrame(yf.Ticker(paper + '.SA').dividends)
-            data['Codigo'] = paper
+            data['SYMBOL'] = paper
             res = pd.concat([res,data], axis=0)
-        res.index.rename('Data', inplace=True)
-        res.columns = ['Valor', 'Codigo']
+        res.index.rename('DATE', inplace=True)
+        res.columns = ['PRICE', 'SYMBOL']
         res['Data de Pagamento'] = 0
-        # display(res[res['Codigo'] == 'CIEL3'])
-        return res[['Codigo', 'Valor', 'Data de Pagamento']].reset_index()
+        # display(res[res['SYMBOL'] == 'CIEL3'])
+        return res[['SYMBOL', 'PRICE', 'Data de Pagamento']].reset_index()
 
 #     -------------------------------------------------------------------------------------------------
 
 class SplitsReader:
     def __init__(self, dataFrame):
-        self.brTickerList = dataFrame[dataFrame['Categoria'].isin(['Ação'])]['Codigo'].unique()
+        self.brTickerList = dataFrame[dataFrame['TYPE'].isin(['Ação'])]['SYMBOL'].unique()
         self.brTickerList += '.SA'
-        self.usTickerList = dataFrame[dataFrame['Categoria'].isin(['Stock'])]['Codigo'].unique()
+        self.usTickerList = dataFrame[dataFrame['TYPE'].isin(['STOCK'])]['SYMBOL'].unique()
         self.df = pd.DataFrame()
     
     def load(self):
@@ -186,12 +186,12 @@ class SplitsReader:
         if(len(self.usTickerList) > 0):
             self.df = self.df.append(self.loadData(self.usTickerList))
 
-        self.df = self.df.sort_values(by=['Data', 'Codigo'])
-        self.df.set_index("Data", inplace = True)
+        self.df = self.df.sort_values(by=['DATE', 'SYMBOL'])
+        self.df.set_index('DATE', inplace = True)
 
     def getPeriod(self, ticker, fromDate, toDate):
-        filtered = self.df[self.df['Codigo'] == ticker].loc[fromDate:toDate]
-        return filtered[['Codigo', 'Quantidade']]
+        filtered = self.df[self.df['SYMBOL'] == ticker].loc[fromDate:toDate]
+        return filtered[['SYMBOL', 'QUANTITY']]
 
     def loadData(self, tickerList):
         res = pd.DataFrame()
@@ -201,10 +201,10 @@ class SplitsReader:
                 data = pd.DataFrame(yf.Ticker(ticker).splits)
             except:
                 continue
-            data['Codigo'] = ticker.replace('.SA', '')
+            data['SYMBOL'] = ticker.replace('.SA', '')
             res = pd.concat([res,data], axis=0)
-        res.index.rename('Data', inplace=True)
-        res.columns = ['Quantidade', 'Codigo']
+        res.index.rename('DATE', inplace=True)
+        res.columns = ['QUANTITY', 'SYMBOL']
         # display(res)
         return res.reset_index()
 
@@ -212,45 +212,61 @@ class SplitsReader:
 
 class TableAccumulator:
     def __init__(self):
-        self.avr = self.acumQty = self.acumProv=0    
+        self.cash = self.avr = self.acumQty = self.acumProv=0
 
     def ByRow(self, row):
-        total = row.loc['Total']
-        stType = row.loc['Tipo']
-        qty = row.loc['Quantidade']
+        total = row.loc['AMOUNT']
+        stType = row.loc['OPERATION']
+        qty = row.loc['QUANTITY']
 
-        if (stType == 'Compra'):
-            self.avr = ((self.avr * self.acumQty) + (row.loc['Valor'] * qty + row.loc['Despesas'])) 
+        if (stType == 'B'):
+            operationValue = row.loc['PRICE'] * qty + row.loc['FEE']
+            self.avr = ((self.avr * self.acumQty) + operationValue) 
             self.acumQty += qty
             self.avr /= self.acumQty
 
-        elif (stType == 'Venda'):
+        elif (stType == 'S'):            
             self.acumQty += qty
             if (self.acumQty == 0):
                 self.acumProv = 0
 
-        elif (stType == "Split"):
+        elif (stType == "SPLIT"):
             self.acumQty *= qty
             self.avr /= qty
 
-        elif (stType == "Proventos"):
+        elif (stType == "DIVIDENDS"):
             total = np.nan
-            row['Quantidade'] = self.acumQty
+            row['QUANTITY'] = self.acumQty
             if( self.acumQty > 0 ):
-                total = row.loc['Valor'] * self.acumQty
+                total = row.loc['PRICE'] * self.acumQty
                 self.acumProv += total
  
 
-        row['Total'] = total
+        row['AMOUNT'] = total
         row['acumProv'] = self.acumProv
         row['acum_qty'] = self.acumQty
         row['PM'] = self.avr
         return row
 
-    def ByGroup(self, group):        
-        self.avr = self.acumQty = self.acumProv = 0    
+    def ByGroup(self, group):
+        self.avr = self.acumQty = self.acumProv = 0
         return group.apply(self.ByRow, axis=1)
 
+    def Cash(self, row):
+        stType = row.loc['OPERATION']
+        amount = row.loc['QUANTITY'] * row.loc['PRICE']
+
+        if (stType == 'B'):
+            self.cash += amount + row.loc['FEE']
+        
+        elif (stType == 'S'):
+            self.cash -= amount - row.loc['FEE']
+
+        elif (stType == "DIVIDENDS" and row['acum_qty'] > 0):
+            self.acumProv += amount 
+
+        row['CASH'] = self.cash
+        return row
 #     -------------------------------------------------------------------------------------------------
 
 #Class to calculate the profit or loss considering day trade rules.
@@ -260,12 +276,12 @@ class Profit:
     
     def DayTrade(self, row):
         profit = 0
-        amount = self.amount + row.Quantidade
-        if(row.Tipo == "Compra"):
-            self.pm = (row.Valor * row.Quantidade) / amount            
+        amount = self.amount + row.QUANTITY
+        if(row.OPERATION == "B"):
+            self.pm = (row.PRICE * row.QUANTITY) / amount            
         else:
-            profit = (self.pm - row.Valor) * row.Quantidade
-            amount = self.amount - row.Quantidade
+            profit = (self.pm - row.PRICE) * row.QUANTITY
+            amount = self.amount - row.QUANTITY
 
         self.amount = amount
         row['Profit'] = profit
@@ -273,8 +289,8 @@ class Profit:
         return row
         
     def Trade(self, dayGroup):
-        purchaseDf = dayGroup.loc[dayGroup.Tipo == 'Compra']
-        sellDf = dayGroup.loc[dayGroup.Tipo == 'Venda']
+        purchaseDf = dayGroup.loc[dayGroup.OPERATION == 'B']
+        sellDf = dayGroup.loc[dayGroup.OPERATION == 'S']
         
         sellCount = len(sellDf)
         purchaseCount = len(purchaseDf)
@@ -284,7 +300,7 @@ class Profit:
             return dayGroup
          
         if(purchaseCount == 0):
-            dayGroup['Profit'] = ((dayGroup.Valor - dayGroup.PM) * -dayGroup.Quantidade ) - dayGroup.Despesas
+            dayGroup['Profit'] = ((dayGroup.PRICE - dayGroup.PM) * -dayGroup.QUANTITY ) - dayGroup.FEE
             dayGroup['DayTrade'] = 0
             return dayGroup
 
@@ -297,33 +313,33 @@ class Profit:
 
 class Portifolio:
     def __init__(self, priceReader, dFrame):
-        self.dtframe = dFrame.groupby(['Codigo']).apply(lambda x: x.tail(1) )[['Codigo', 'PM', 'acum_qty', 'acumProv', 'Categoria']]
-        self.dtframe.columns = ['Ativo', 'PM', 'Quantidade', 'Proventos', 'Categoria']
+        self.dtframe = dFrame.groupby(['SYMBOL']).apply(lambda x: x.tail(1) )[['SYMBOL', 'PM', 'acum_qty', 'acumProv', 'TYPE']]
+        self.dtframe.columns = ['Ativo', 'PM', 'QUANTITY', 'DIVIDENDS', 'TYPE']
         self.dtframe.reset_index(drop=True, inplace=True)
-        self.dtframe["Custo"] = self.dtframe.PM * self.dtframe.Quantidade
-        self.dtframe = self.dtframe[self.dtframe['Quantidade'] > 0]
+        self.dtframe["COST"] = self.dtframe.PM * self.dtframe.QUANTITY
+        self.dtframe = self.dtframe[self.dtframe['QUANTITY'] > 0]
 
-        self.dtframe['Cotacao'] = self.dtframe.apply(priceReader.fillCurrentValue, axis=1)['Cotacao']
-        self.dtframe['Cotacao'] = self.dtframe['Cotacao'].fillna(self.dtframe['PM'])
-        self.dtframe["Valor"] = self.dtframe['Cotacao'] * self.dtframe.Quantidade
+        self.dtframe['PRICE'] = self.dtframe.apply(priceReader.fillCurrentValue, axis=1)['PRICE']
+        self.dtframe['PRICE'] = self.dtframe['PRICE'].fillna(self.dtframe['PM'])
+        self.dtframe["MKT_VALUE"] = self.dtframe['PRICE'] * self.dtframe.QUANTITY
 
-        self.dtframe['Rentabilidade'] = self.dtframe['Valor'] - self.dtframe['Custo']
-        self.dtframe['Lucro'] = self.dtframe['Rentabilidade'] + self.dtframe['Proventos']
-        self.dtframe['%R'] = self.dtframe['Rentabilidade'] / self.dtframe['Custo'] *100
-        self.dtframe['%R+d'] = self.dtframe['Lucro'] / self.dtframe['Custo'] * 100
-        self.dtframe['Alocacao'] = (self.dtframe['Valor'] / self.dtframe['Valor'].sum()) * 100
+        self.dtframe['Rentabilidade'] = self.dtframe['MKT_VALUE'] - self.dtframe['COST']
+        self.dtframe['Lucro'] = self.dtframe['Rentabilidade'] + self.dtframe['DIVIDENDS']
+        self.dtframe['%R'] = self.dtframe['Rentabilidade'] / self.dtframe['COST'] *100
+        self.dtframe['%R+d'] = self.dtframe['Lucro'] / self.dtframe['COST'] * 100
+        self.dtframe['Alocacao'] = (self.dtframe['MKT_VALUE'] / self.dtframe['MKT_VALUE'].sum()) * 100
         self.dtframe = self.dtframe.replace([np.inf, -np.inf], np.nan).fillna(0)
 
-        self.dtframe = self.dtframe[['Ativo', 'PM', 'Cotacao', 'Quantidade', 'Custo', 'Valor', 'Proventos', 'Rentabilidade', 'Lucro', '%R', '%R+d', 'Alocacao']]
+        self.dtframe = self.dtframe[['Ativo', 'PM', 'PRICE', 'QUANTITY', 'COST', 'MKT_VALUE', 'DIVIDENDS', 'Rentabilidade', 'Lucro', '%R', '%R+d', 'Alocacao']]
         self.dtframe.set_index('Ativo', inplace=True)
-        self.format = {'Cotacao': 'R$ {:,.2f}', 'PM': 'R$ {:.2f}', 'Quantidade': '{:>n}', 'Custo': 'R$ {:,.2f}', 'Valor': 'R$ {:,.2f}', 'Proventos': 'R$ {:,.2f}',\
+        self.format = {'PRICE': 'R$ {:,.2f}', 'PM': 'R$ {:.2f}', 'QUANTITY': '{:>n}', 'COST': 'R$ {:,.2f}', 'MKT_VALUE': 'R$ {:,.2f}', 'DIVIDENDS': 'R$ {:,.2f}',\
                                     'Rentabilidade': 'R$ {:,.2f}', 'Lucro': 'R$ {:,.2f}', '%R': '{:,.2f}%', '%R+d': '{:,.2f}%', 'Alocacao': '{:,.2f}%'}
 
     def show(self):
         fdf = self.dtframe
-        # fdf.loc['Total', 'Custo'] = fdf['Custo'].sum()
-        # fdf.loc['Total', 'Valor'] = fdf['Valor'].sum()
-        # fdf.loc['Total', 'Rentabilidade'] = fdf['Rentabilidade'].sum()
+        # fdf.loc['AMOUNT', 'COST'] = fdf['COST'].sum()
+        # fdf.loc['AMOUNT', 'MKT_VALUE'] = fdf['MKT_VALUE'].sum()
+        # fdf.loc['AMOUNT', 'Rentabilidade'] = fdf['Rentabilidade'].sum()
         # fdf.fillna(' ', inplace=True)
         return fdf.style.applymap(color_negative_red).format(self.format)
 
@@ -334,7 +350,7 @@ class PerformanceBlueprint:
         self.equity = self.cost = self.realizedProfit = self.div = self.paperProfit = self.profit \
         = self.usdIbov = self.ibov = self.sp500 = self.profitRate = self.expense = 0
         self.date = date
-        self.df = dataframe[(dataframe['Data'] <= date)]
+        self.df = dataframe[(dataframe['DATE'] <= date)]
         # display(self.df)
         if (not self.df.empty):
             priceReader.setFillDate(self.date)
@@ -343,10 +359,10 @@ class PerformanceBlueprint:
     def calc(self):
         if (not self.df.empty):
             ptf = self.pt.dtframe
-            self.equity            = (ptf['Cotacao'] * ptf['Quantidade']).sum()
-            self.cost                = ptf['Custo'].sum()
-            self.realizedProfit = self.df.loc[self.df.Tipo == 'Venda', 'Profit'].sum()
-            self.div                 = self.df[self.df.Tipo == 'Proventos']['Total'].sum()
+            self.equity            = (ptf['PRICE'] * ptf['QUANTITY']).sum()
+            self.cost                = ptf['COST'].sum()
+            self.realizedProfit = self.df.loc[self.df.OPERATION == 'S', 'Profit'].sum()
+            self.div                 = self.df[self.df.OPERATION == 'DIVIDENDS']['AMOUNT'].sum()
             self.paperProfit = self.equity -    self.cost
             self.profit            = self.equity -    self.cost +    self.realizedProfit +    self.div
             self.profitRate    = self.profit / self.cost
@@ -354,7 +370,7 @@ class PerformanceBlueprint:
             self.ibov                = indexHistory.iloc[-1]/indexHistory.iloc[0] - 1
             indexHistory         = self.pcRdr.getIndexHistory('S&P500', self.date)
             self.sp500             = indexHistory.iloc[-1]/indexHistory.iloc[0] - 1
-            self.expense         = self.df.loc[self.df.Tipo == "Compra",'Despesas'].sum()
+            self.expense         = self.df.loc[self.df.OPERATION == "B",'FEE'].sum()
             return self
 
 #     -------------------------------------------------------------------------------------------------
@@ -399,17 +415,17 @@ class Taxation:
 
     def DayTrade(self, stockType):
         #Filter by stockType and get the year list
-        dayTrade = self.df[(self.df['DayTrade'] == 1) & (self.df['Categoria'] == stockType)]
-        dayTrade = dayTrade.groupby(['Codigo', 'Data'])['Profit'].sum().reset_index()
-        dayTrade['Year'] = pd.DatetimeIndex(dayTrade['Data']).year
-        dayTrade['Month'] = pd.DatetimeIndex(dayTrade['Data']).month_name()
+        dayTrade = self.df[(self.df['DayTrade'] == 1) & (self.df['TYPE'] == stockType)]
+        dayTrade = dayTrade.groupby(['SYMBOL', 'DATE'])['Profit'].sum().reset_index()
+        dayTrade['Year'] = pd.DatetimeIndex(dayTrade['DATE']).year
+        dayTrade['Month'] = pd.DatetimeIndex(dayTrade['DATE']).month_name()
         dayTrade=dayTrade[['Month','Profit','Year']]
         return dayTrade
 
     def SwingTrade(self, stockType):
         swingTrade = pd.DataFrame(columns=['Month','Profit'])
         #Filter by stockType and get the year list
-        typeDF = self.df[(self.df['DayTrade'] == 0) & (self.df['Categoria'] == stockType)]
+        typeDF = self.df[(self.df['DayTrade'] == 0) & (self.df['TYPE'] == stockType)]
         years = typeDF.Year.unique()
         for year in years: 
             #Calculate the Profit/Loss by month in the current year
@@ -428,7 +444,7 @@ class Taxation:
 
     def Process(self, stockType='FII'):
 
-        if(not self.df['Tipo'].str.contains(stockType).any()):
+        if(not self.df['OPERATION'].str.contains(stockType).any()):
             return
 
         taxDF = self.SwingTrade(stockType)
@@ -569,9 +585,9 @@ class CompanyListReader:
 
 ##Clear operation cost before 2019
 def clear2018Cost(row):
-    if (row['Data'].year < 2019):
+    if (row['DATE'].year < 2019):
         return 0
-    return row['Despesas']
+    return row['FEE']
 
 def color_negative_red(val):
     return 'color: %s' % ('red' if val < 0 else 'green')
