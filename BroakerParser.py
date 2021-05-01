@@ -32,8 +32,9 @@ class Clear(Broaker):
         super().__init__(outDir, name)
 
     def process(self, page):
-        text = page.extract_text()
+        liqFee = liqFee = emolFee = opFee = exFee = custodyFee = irrf = otherFee = 0
 
+        text = page.extract_text()
         order = namedtuple('order', 'Code Date Company Type Category Qty Value Total Sub ')
         line_itens = []
         for line in text.split('\n'):
