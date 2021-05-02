@@ -116,7 +116,31 @@ def ReadOrders(indir='d:/Investing/Notas_Clear', outfile='operations.csv', pdfTy
         os.remove(tempFile)
     except:
         os.rename(tempFile, outPath)
-        
+
+def ReadTDStatement(inFile='d:/Investing/Notas_TD/transactions.csv', outfile='d:/Investing/TD.csv'):
+    def DescriptionParser(row):
+        desc = row['DESCRIPTION']
+        if ('Bought' in desc):
+            row['DESCRIPTION'] = 'B'
+        if ('Sold' in desc):
+            row['DESCRIPTION'] = 'S'
+        if ('WIRE' in desc):
+            row['DESCRIPTION'] = 'W'
+            row['TYPE'] = 'WIRE'
+            row['SYMBOL'] = 'CASH'
+            row['QUANTITY'] = 1
+            row['PRICE'] = row['AMOUNT']
+        return row
+    
+    df = pd.read_csv(inFile)
+    df=df[~df['DATE'].str.contains('END OF FILE')].fillna(0)
+    df['TYPE'] = 'STOCK'
+    df['DATE'] = pd.to_datetime(df['DATE']).dt.strftime('%Y-%m-%d')
+    df = df[['SYMBOL', 'DATE', 'PRICE', 'QUANTITY', 'DESCRIPTION', 'TYPE', 'COMMISSION', 'AMOUNT']]
+
+    df = df.apply(DescriptionParser, axis=1)
+    df = df.rename(columns={'DESCRIPTION':'OPERATION'})
+    df.to_csv(outfile, index=False)
 
 if __name__ == "__main__":
     # start_time = time.time()
