@@ -34,7 +34,7 @@ class PriceReader:
         self.fillDate = date
 
     def fillCurrentValue(self, row):
-        row['PRICE'] = self.getCurrentValue(row['Ativo'], self.fillDate)
+        row['PRICE'] = self.getCurrentValue(row['SYMBOL'], self.fillDate)
         return row
 
     def readData(self, code, startDate='01-01-2018'):
@@ -225,7 +225,7 @@ class TableAccumulator:
             self.acumQty += qty
             self.avr /= self.acumQty
 
-        elif (stType == 'S'):            
+        elif (stType == 'S'):
             self.acumQty += qty
             if (self.acumQty == 0):
                 self.acumProv = 0
@@ -256,12 +256,12 @@ class TableAccumulator:
         stType = row.loc['OPERATION']
         amount = row.loc['QUANTITY'] * row.loc['PRICE']
 
-        if (stType == 'B'):
+        if (stType in ['S', 'W']):
             self.cash += amount + row.loc['FEE']
-        
-        elif (stType == 'S'):
-            self.cash -= amount - row.loc['FEE']
 
+        elif (stType == 'B'):
+            self.cash -= amount - row.loc['FEE']
+        
         elif (stType == "DIVIDENDS" and row['acum_qty'] > 0):
             self.acumProv += amount 
 
@@ -313,8 +313,10 @@ class Profit:
 
 class Portifolio:
     def __init__(self, priceReader, dFrame):
-        self.dtframe = dFrame.groupby(['SYMBOL']).apply(lambda x: x.tail(1) )[['SYMBOL', 'PM', 'acum_qty', 'acumProv', 'TYPE']]
-        self.dtframe.columns = ['Ativo', 'PM', 'QUANTITY', 'DIVIDENDS', 'TYPE']
+        self.dtframe = dFrame.groupby(['SYMBOL']).apply(lambda x: x.tail(1) )
+        cash = dFrame.iloc[-1]['CASH']
+        self.dtframe = self.dtframe[['SYMBOL', 'PM', 'acum_qty', 'acumProv', 'TYPE']]
+        self.dtframe.columns = ['SYMBOL', 'PM', 'QUANTITY', 'DIVIDENDS', 'TYPE']
         self.dtframe.reset_index(drop=True, inplace=True)
         self.dtframe["COST"] = self.dtframe.PM * self.dtframe.QUANTITY
         self.dtframe = self.dtframe[self.dtframe['QUANTITY'] > 0]
@@ -322,24 +324,28 @@ class Portifolio:
         self.dtframe['PRICE'] = self.dtframe.apply(priceReader.fillCurrentValue, axis=1)['PRICE']
         self.dtframe['PRICE'] = self.dtframe['PRICE'].fillna(self.dtframe['PM'])
         self.dtframe["MKT_VALUE"] = self.dtframe['PRICE'] * self.dtframe.QUANTITY
-
-        self.dtframe['Rentabilidade'] = self.dtframe['MKT_VALUE'] - self.dtframe['COST']
-        self.dtframe['Lucro'] = self.dtframe['Rentabilidade'] + self.dtframe['DIVIDENDS']
-        self.dtframe['%R'] = self.dtframe['Rentabilidade'] / self.dtframe['COST'] *100
-        self.dtframe['%R+d'] = self.dtframe['Lucro'] / self.dtframe['COST'] * 100
-        self.dtframe['Alocacao'] = (self.dtframe['MKT_VALUE'] / self.dtframe['MKT_VALUE'].sum()) * 100
+        
+        newLine = {'SYMBOL':'CASH', 'PM':cash, 'QUANTITY':1, 'DIVIDENDS':0, 'TYPE':'W', 'COST':cash, 'PRICE':cash, 'MKT_VALUE':cash}
+        self.dtframe = self.dtframe.append(pd.DataFrame(newLine, index=[0]))
+        # self.dtframe.to_csv('H:/Git/Finances/log1.csv')
+        
+        self.dtframe['GAIN($)'] = self.dtframe['MKT_VALUE'] - self.dtframe['COST']
+        self.dtframe['GAIN+DIV($)'] = self.dtframe['GAIN($)'] + self.dtframe['DIVIDENDS']
+        self.dtframe['GAIN(%)'] = self.dtframe['GAIN($)'] / self.dtframe['COST'] *100
+        self.dtframe['GAIN+DIV(%)'] = self.dtframe['GAIN+DIV($)'] / self.dtframe['COST'] * 100
+        self.dtframe['ALLOCATION'] = (self.dtframe['MKT_VALUE'] / self.dtframe['MKT_VALUE'].sum()) * 100
         self.dtframe = self.dtframe.replace([np.inf, -np.inf], np.nan).fillna(0)
 
-        self.dtframe = self.dtframe[['Ativo', 'PM', 'PRICE', 'QUANTITY', 'COST', 'MKT_VALUE', 'DIVIDENDS', 'Rentabilidade', 'Lucro', '%R', '%R+d', 'Alocacao']]
-        self.dtframe.set_index('Ativo', inplace=True)
-        self.format = {'PRICE': 'R$ {:,.2f}', 'PM': 'R$ {:.2f}', 'QUANTITY': '{:>n}', 'COST': 'R$ {:,.2f}', 'MKT_VALUE': 'R$ {:,.2f}', 'DIVIDENDS': 'R$ {:,.2f}',\
-                                    'Rentabilidade': 'R$ {:,.2f}', 'Lucro': 'R$ {:,.2f}', '%R': '{:,.2f}%', '%R+d': '{:,.2f}%', 'Alocacao': '{:,.2f}%'}
+        self.dtframe = self.dtframe[['SYMBOL', 'PM', 'PRICE', 'QUANTITY', 'COST', 'MKT_VALUE', 'DIVIDENDS', 'GAIN($)', 'GAIN+DIV($)', 'GAIN(%)', 'GAIN+DIV(%)', 'ALLOCATION']]
+        self.dtframe.set_index('SYMBOL', inplace=True)
+        self.format = {'PRICE': '$ {:,.2f}', 'PM': '$ {:.2f}', 'QUANTITY': '{:>n}', 'COST': '$ {:,.2f}', 'MKT_VALUE': '$ {:,.2f}', 'DIVIDENDS': '$ {:,.2f}',\
+                                    'GAIN($)': '$ {:,.2f}', 'GAIN+DIV($)': '$ {:,.2f}', 'GAIN(%)': '{:,.2f}%', 'GAIN+DIV(%)': '{:,.2f}%', 'ALLOCATION': '{:,.2f}%'}
 
     def show(self):
         fdf = self.dtframe
         # fdf.loc['AMOUNT', 'COST'] = fdf['COST'].sum()
         # fdf.loc['AMOUNT', 'MKT_VALUE'] = fdf['MKT_VALUE'].sum()
-        # fdf.loc['AMOUNT', 'Rentabilidade'] = fdf['Rentabilidade'].sum()
+        # fdf.loc['AMOUNT', 'GAIN($)'] = fdf['GAIN($)'].sum()
         # fdf.fillna(' ', inplace=True)
         return fdf.style.applymap(color_negative_red).format(self.format)
 
@@ -359,18 +365,19 @@ class PerformanceBlueprint:
     def calc(self):
         if (not self.df.empty):
             ptf = self.pt.dtframe
-            self.equity            = (ptf['PRICE'] * ptf['QUANTITY']).sum()
-            self.cost                = ptf['COST'].sum()
-            self.realizedProfit = self.df.loc[self.df.OPERATION == 'S', 'Profit'].sum()
-            self.div                 = self.df[self.df.OPERATION == 'DIVIDENDS']['AMOUNT'].sum()
-            self.paperProfit = self.equity -    self.cost
-            self.profit            = self.equity -    self.cost +    self.realizedProfit +    self.div
-            self.profitRate    = self.profit / self.cost
+            self.equity          = (ptf['PRICE'] * ptf['QUANTITY']).sum()
+            self.cost            = ptf['COST'].sum()
+            self.realizedProfit  = self.df.loc[self.df.OPERATION == 'S', 'Profit'].sum()
+            self.div             = self.df[self.df.OPERATION == 'DIVIDENDS']['AMOUNT'].sum()
+            self.paperProfit     = self.equity -    self.cost
+            self.profit          = self.equity -    self.cost +    self.realizedProfit +    self.div
+            self.profitRate      = self.profit / self.cost
             indexHistory         = self.pcRdr.getIndexHistory('IBOV',self.date)
-            self.ibov                = indexHistory.iloc[-1]/indexHistory.iloc[0] - 1
+            self.ibov            = indexHistory.iloc[-1]/indexHistory.iloc[0] - 1
             indexHistory         = self.pcRdr.getIndexHistory('S&P500', self.date)
-            self.sp500             = indexHistory.iloc[-1]/indexHistory.iloc[0] - 1
+            self.sp500           = indexHistory.iloc[-1]/indexHistory.iloc[0] - 1
             self.expense         = self.df.loc[self.df.OPERATION == "B",'FEE'].sum()
+            self.exchangeRatio   = self.pcRdr.getIndexCurrentValue('USD',self.date)
             return self
 
 #     -------------------------------------------------------------------------------------------------
@@ -485,27 +492,28 @@ class Taxation:
 
 class PerformanceViewer:
         def __init__(self, *args):
-                self.pf = pd.DataFrame(columns = ['Item', "Value R$", '%C'])
+                self.pf = pd.DataFrame(columns = ['Item', 'USD', 'BRL', '%'])
                 if (len(args) == 2 and isinstance(args[0], pd.DataFrame)):
                         row = args[0].set_index('Date').loc[args[1]]
                         self.buildTable(row['Equity'], row['Cost'], row['Expense'], row['paperProfit'], row['Profit'], row['Div'], row['TotalProfit'])
                 elif(isinstance(args[0], PerformanceBlueprint)):
                         p = args[0]
-                        self.buildTable(p.equity, p.cost, p.expense, p.paperProfit, p.realizedProfit, p.div, p.profit)
+                        self.buildTable(p.equity, p.cost, p.expense, p.paperProfit, p.realizedProfit, p.div, p.profit, p.exchangeRatio)
 
-        def buildTable(self, equity, cost, expense, paperProfit, profit, div, totalProfit):
-                self.pf.loc[len(self.pf)] = ['Equity                    ' , equity,equity / cost]
-                self.pf.loc[len(self.pf)] = ['Cost                        ' , cost, 1]
-                self.pf.loc[len(self.pf)] = ['Expenses                ' , expense, expense/cost]
-                self.pf.loc[len(self.pf)] = ['Paper profit        ' , paperProfit, paperProfit / cost]
-                self.pf.loc[len(self.pf)] = ['Realized profit ' , profit, profit / cost]
-                self.pf.loc[len(self.pf)] = ['Dividends             ' , div, div / cost]
-                self.pf.loc[len(self.pf)] = ['Total Profit        ' , totalProfit, totalProfit / cost]
-                self.pf.loc[:, '%C'] *= 100
+        def buildTable(self, equity, cost, expense, paperProfit, profit, div, totalProfit, exchangeRatio=0.22):
+                self.pf.loc[len(self.pf)] = ['Equity          ' , equity,equity, equity/cost]
+                self.pf.loc[len(self.pf)] = ['Cost            ' , cost,cost, 1]
+                self.pf.loc[len(self.pf)] = ['Expenses        ' , expense,expense, expense/cost]
+                self.pf.loc[len(self.pf)] = ['Paper profit    ' , paperProfit,paperProfit, paperProfit/cost]
+                self.pf.loc[len(self.pf)] = ['Realized profit ' , profit,profit, profit/cost]
+                self.pf.loc[len(self.pf)] = ['Dividends       ' , div,div, div/cost]
+                self.pf.loc[len(self.pf)] = ['Total Profit    ' , totalProfit,totalProfit, totalProfit/cost]
+                self.pf.loc[:, '%'] *= 100
+                self.pf.loc[:, 'BRL'] /= exchangeRatio
                 self.pf.set_index('Item', inplace=True)
 
         def show(self):
-                format_dict = { 'Value R$': ' {:^,.2f}', '%C': ' {:>.1f}%' }
+                format_dict = { 'USD': ' {:^,.2f}', 'BRL': ' {:^,.2f}', '%': ' {:>.1f}%' }
                 return self.pf.style.applymap(color_negative_red).format(format_dict)
 
 #     -------------------------------------------------------------------------------------------------
