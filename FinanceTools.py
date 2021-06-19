@@ -100,22 +100,25 @@ class DividendReader:
         self.brTickerList = dataFrame[dataFrame['TYPE'] == 'Ação']['SYMBOL'].unique()
         self.usTickerList = dataFrame[dataFrame['TYPE'] == 'STOCK']['SYMBOL'].unique()
         self.fiiList = dataFrame[dataFrame['TYPE'] == 'FII']['SYMBOL'].unique()
-        self.df = pd.DataFrame(columns=['SYMBOL', 'PRICE', 'Data de Pagamento'])
+        self.df = pd.DataFrame(columns=['SYMBOL', 'PRICE', 'PAYDATE'])
 
-    def load(self):
+    def load(self):        
         if(len(self.brTickerList) > 0):
             self.df = self.df.append(self.loadData(self.brTickerList, self.stockUrl))
         
         if(len(self.fiiList) > 0):
             self.df = self.df.append(self.loadData(self.fiiList, self.fiiUrl))
 
+        if(len(self.usTickerList) > 0):
+            self.df = self.df.append(self.loadData(self.usTickerList))
+
         if(not self.df.empty):
             self.df = self.df.sort_values(by=['DATE', 'SYMBOL'])
-            self.df.set_index("Data", inplace = True)
-            self.df = self.df[['SYMBOL', 'PRICE', 'Data de Pagamento']]
+            self.df.set_index("DATE", inplace = True)
+            self.df = self.df[['SYMBOL', 'PRICE', 'PAYDATE']]
             # display(self.df.tail(20))
 
-    def loadData(self, paperList, baseUrl):
+    def loadData(self, paperList, baseUrl=None):
         tb = pd.DataFrame()
         for paper in paperList:
             url = baseUrl.format(paper)
@@ -127,7 +130,7 @@ class DividendReader:
 
             rawTable = pd.read_html(r.text, thousands='.',decimal=',')[0]
             if('fii' in baseUrl):
-                rawTable.columns = ['DATE', 'OPERATION', 'Data de Pagamento', 'PRICE'] 
+                rawTable.columns = ['DATE', 'OPERATION', 'PAYDATE', 'PRICE'] 
 
             rawTable['SYMBOL'] = paper
             if('Por quantas ações' in rawTable.columns):
@@ -136,12 +139,12 @@ class DividendReader:
                 rawTable['PRICE'] = np.where(rawTable['OPERATION'] == 'DIVIDENDO',    rawTable['PRICE'],    rawTable['PRICE'] * 0.85 )
                 
 
-            rawTable = rawTable[['SYMBOL', 'DATE','PRICE', 'Data de Pagamento']]
+            rawTable = rawTable[['SYMBOL', 'DATE','PRICE', 'PAYDATE']]
 
-            rawTable['Data de Pagamento'] = np.where(rawTable['Data de Pagamento'] == '-',\
-                            rawTable['DATE'], rawTable['Data de Pagamento'])
+            rawTable['PAYDATE'] = np.where(rawTable['PAYDATE'] == '-',\
+                            rawTable['DATE'], rawTable['PAYDATE'])
             
-            rawTable['Data de Pagamento'] = pd.to_datetime(rawTable['Data de Pagamento'], format='%d/%m/%Y')
+            rawTable['PAYDATE'] = pd.to_datetime(rawTable['PAYDATE'], format='%d/%m/%Y')
             rawTable['DATE'] = pd.to_datetime(rawTable['DATE'], format='%d/%m/%Y')
 
             # display(rawTable.tail())
@@ -151,24 +154,26 @@ class DividendReader:
     def getPeriod(self, paper, fromDate, toDate):
         filtered = self.df[self.df['SYMBOL'] == paper].loc[fromDate:toDate]
         return filtered[['SYMBOL', 'PRICE']]
-    # display(tb)
 
 #     -------------------------------------------------------------------------------------------------
 
 import yfinance as yf
 
 class YfinanceReader(DividendReader):
-    def loadData(self, paperList, baseUrl):
+    def loadData(self, paperList, baseUrl=None):
         res = pd.DataFrame()
+        paperList = paperList + '.SA' if baseUrl != None else paperList
+        
         for paper in paperList:
-            data = pd.DataFrame(yf.Ticker(paper + '.SA').dividends)
+            data = pd.DataFrame(yf.Ticker(paper).dividends)
             data['SYMBOL'] = paper
             res = pd.concat([res,data], axis=0)
+        
         res.index.rename('DATE', inplace=True)
         res.columns = ['PRICE', 'SYMBOL']
-        res['Data de Pagamento'] = 0
+        res['PAYDATE'] = 0
         # display(res[res['SYMBOL'] == 'CIEL3'])
-        return res[['SYMBOL', 'PRICE', 'Data de Pagamento']].reset_index()
+        return res[['SYMBOL', 'PRICE', 'PAYDATE']].reset_index()
 
 #     -------------------------------------------------------------------------------------------------
 
@@ -234,13 +239,19 @@ class TableAccumulator:
             self.acumQty *= qty
             self.avr /= qty
 
-        elif (stType == "DIVIDENDS"):
+        elif (stType == "D"):
             total = np.nan
             row['QUANTITY'] = self.acumQty
             if( self.acumQty > 0 ):
                 total = row.loc['PRICE'] * self.acumQty
                 self.acumProv += total
- 
+        elif (stType == 'T'):
+            total = np.nan
+            row['QUANTITY'] = self.acumQty
+            if( self.acumQty > 0 ):
+                total = row.loc['PRICE']
+                row.loc['PRICE'] /= self.acumQty
+                self.acumProv += total
 
         row['AMOUNT'] = total
         row['acumProv'] = self.acumProv
@@ -262,8 +273,9 @@ class TableAccumulator:
         elif (stType == 'B'):
             self.cash -= amount - row.loc['FEE']
         
-        elif (stType == "DIVIDENDS" and row['acum_qty'] > 0):
+        elif (stType in ['D', 'T'] and row['acum_qty'] > 0):
             self.acumProv += amount 
+            self.cash += amount
 
         row['CASH'] = self.cash
         return row
@@ -368,7 +380,7 @@ class PerformanceBlueprint:
             self.equity          = (ptf['PRICE'] * ptf['QUANTITY']).sum()
             self.cost            = ptf['COST'].sum()
             self.realizedProfit  = self.df.loc[self.df.OPERATION == 'S', 'Profit'].sum()
-            self.div             = self.df[self.df.OPERATION == 'DIVIDENDS']['AMOUNT'].sum()
+            self.div             = self.df[self.df.OPERATION == 'D']['AMOUNT'].sum()
             self.paperProfit     = self.equity -    self.cost
             self.profit          = self.equity -    self.cost +    self.realizedProfit +    self.div
             self.profitRate      = self.profit / self.cost
