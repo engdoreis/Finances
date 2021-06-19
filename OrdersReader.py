@@ -124,6 +124,14 @@ def ReadTDStatement(inFile='d:/Investing/Notas_TD/transactions.csv', outfile='d:
             row['DESCRIPTION'] = 'B'
         if ('Sold' in desc):
             row['DESCRIPTION'] = 'S'
+        if ('DIVIDEND' in desc):
+            row['DESCRIPTION'] = 'D1'
+            row['QUANTITY'] = 1
+            row['PRICE'] = row['AMOUNT']
+        if ('W-8' in desc): #Dividend Taxes
+            row['DESCRIPTION'] = 'T'
+            row['QUANTITY'] = 1
+            row['PRICE'] = row['AMOUNT']
         if ('WIRE' in desc):
             row['DESCRIPTION'] = 'W'
             row['TYPE'] = 'WIRE'
