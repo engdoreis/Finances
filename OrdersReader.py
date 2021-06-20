@@ -42,7 +42,7 @@ class OrderOrganizer:
             self.dtFrame = self.dtFrame.merge(self.cmpMap, how='left', on=['Company', 'Sub'])
             self.dtFrame = self.dtFrame.apply(self.partialMatch, axis=1).reset_index(drop=True)
             self.dtFrame['Date'] = pd.to_datetime(self.dtFrame['Date'])
-            self.dtFrame = self.dtFrame.sort_values('Date').reset_index(drop=True)            
+            self.dtFrame = self.dtFrame.sort_values('Date').reset_index(drop=True)
         else:
             self.dtFrame['Paper'] = self.dtFrame['Code']
         return self.dtFrame
@@ -133,7 +133,7 @@ def ReadTDStatement(inFile='d:/Investing/Notas_TD/transactions.csv', outfile='d:
             row['QUANTITY'] = 1
             row['PRICE'] = row['AMOUNT']
         if ('WIRE' in desc):
-            row['DESCRIPTION'] = 'W'
+            row['DESCRIPTION'] = 'C'
             row['TYPE'] = 'WIRE'
             row['SYMBOL'] = 'CASH'
             row['QUANTITY'] = 1

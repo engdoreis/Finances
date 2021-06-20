@@ -21,18 +21,19 @@ class Broaker():
 class Clear(Broaker):
     def __init__(self, outDir, name='default'):
         self.date_re = re.compile(r'\d{2}/\d{2}/\d{4}$')
-        self.operation_re = re.compile(r'[\w\d-]+\s(C|V)\s+(?:VISTA|FRACIONARIO)\s(?:\d\d/\d\d)?([\w\d\s./]+?)\s\s+([\w\d\s#]+?)\s(\d+)\s([\d.,]+)\s([\d.,]+)\s(\w)')
+        self.operation_re = re.compile(r'[\w\d-]+\s(C|V)\s+(?:VISTA|FRACIONARIO)\s(?:\d\d\/\d\d)?([\w\d\s.\/]+?)\s\s+([\w\d\s#]+?)\s([\d.,]+)\s([\d.,]+)\s([\d.,]+)\s(\w)')
         self.liqFee_re = re.compile(r'.*?Taxa de liquida.*?\s+([\d,]+)')
         self.emolFee_re = re.compile(r'Emolumentos\s+([\d,]+)')
         self.opFee_re = re.compile(r'Taxa Operacional\s+([\d,]+)')
         self.exFee_re = re.compile(r'Execu\w+\s+([\d,]+)')
         self.custodyFee_re = re.compile(r'.*?Taxa de Cust\w+\s+([\d,]+)')
         self.irrf_re = re.compile(r'I.R.R.F.*?base.*?[\d,]+\s([\d,]+)')
+        self.taxes_re = re.compile(r'Impostos\s+([\d,]+)')
         self.otherFee_re = re.compile(r'Outros\s+([\d,]+)')
         super().__init__(outDir, name)
 
     def process(self, page):
-        liqFee = liqFee = emolFee = opFee = exFee = custodyFee = irrf = otherFee = 0
+        liqFee = liqFee = emolFee = opFee = exFee = custodyFee = irrf = taxes = otherFee = 0
 
         text = page.extract_text()
         order = namedtuple('order', 'Code Date Company Type Category Qty Value Total Sub ')
@@ -40,8 +41,8 @@ class Clear(Broaker):
         for line in text.split('\n'):
             res = self.operation_re.search(line)
             if res:
-                # print (res.group(0))
-                opType = 'Venda' if res.group(1)=='V' else 'Compra'
+                print (res.group(0))
+                opType = 'S' if res.group(1)=='V' else 'B'
                 name = res.group(2).strip()
                 code = res.group(3).strip()
 
@@ -51,7 +52,7 @@ class Clear(Broaker):
                 else:
                     category = 'Ação'
 
-                line_itens.append(order(code, Date, name, opType, category, int(res.group(4)), to_float(res.group(5)), to_float(res.group(6)), code.split(' ')[0] ))
+                line_itens.append(order(code, Date, name, opType, category, int(res.group(4).replace('.','')), to_float(res.group(5)), to_float(res.group(6)), code.split(' ')[0] ))
                 continue
 
             res = self.date_re.search(line)
@@ -89,6 +90,11 @@ class Clear(Broaker):
                 irrf = to_float( res.group(1))
                 continue
 
+            res = self.taxes_re.search(line)
+            if res:
+                taxes = to_float( res.group(1))
+                continue
+
             res = self.otherFee_re.search(line)
             if res:
                 otherFee = to_float( res.group(1))
@@ -103,8 +109,9 @@ class Clear(Broaker):
         df['ExFee'] = exFee * df['Total'] / total
         df['CustodyFee'] = custodyFee * df['Total'] / total
         df['Irrf'] = irrf * df['Total'] / total
+        df['Taxes'] = taxes * df['Total'] / total
         df['otherFee'] = otherFee * df['Total'] / total
-        df['Fee'] = df['LiqFee'] + df['EmolFee'] + df['OpFee'] + df['ExFee'] + df['CustodyFee'] + df['Irrf'] + df['otherFee']
+        df['Fee'] = df['LiqFee'] + df['EmolFee'] + df['OpFee'] + df['ExFee'] + df['CustodyFee'] + df['Irrf'] +  df['Taxes'] + df['otherFee']
         self.dtFrame = self.dtFrame.merge(df, how='outer')
 
 class TDAmeritrade(Broaker):
@@ -124,7 +131,7 @@ class TDAmeritrade(Broaker):
             res = self.operation_re.search(line)
             if res:
                 # print (res.group(0))
-                opType = 'Compra' if res.group(1) == 'BOUGHT' else 'Venda'
+                opType = 'B' if res.group(1) == 'BOUGHT' else 'S'
                 qty = int(res.group(2))
                 value = float(res.group(3))
                 fee = float(res.group(5))
