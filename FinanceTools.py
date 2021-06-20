@@ -2,9 +2,15 @@ from pandas_datareader import data as web
 import pandas as pd
 import datetime as dt
 import numpy as np
+import requests
+http_header = {
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.75 Safari/537.36",
+        "X-Requested-With": "XMLHttpRequest"
+    }
+
 
 class PriceReader:
-    def __init__(self, brTickerList, usTickerList, startDate='01-01-2018'):
+    def __init__(self, brTickerList, usTickerList, startDate='2018-01-01'):
         self.brTickerList = brTickerList
         self.usTickerList = usTickerList
         self.startDate = startDate
@@ -22,11 +28,11 @@ class PriceReader:
             self.df = self.df.merge(self.readUSData(self.usTickerList, self.startDate).reset_index(), how='outer', on='Date')
 
         self.df = self.df.set_index('Date').sort_index()
-        self.df.to_csv('debug.csv', sep='\t')
+        # self.df.to_csv('debug.csv', sep='\t')
 
         indexList = ['^BVSP', '^GSPC', 'BRLUSD=X']
         self.brlIndex = self.readUSData(indexList, self.startDate).reset_index()
-        self.brlIndex.columns = ['Date', 'IBOV', 'S&P500', 'USD']
+        self.brlIndex.rename(columns={'^BVSP':'IBOV', '^GSPC':'S&P500', 'BRLUSD=X':'USD'}, inplace=True)
         self.brlIndex = self.brlIndex.set_index('Date')
         # display(self.brlIndex)
 
@@ -36,19 +42,28 @@ class PriceReader:
     def fillCurrentValue(self, row):
         row['PRICE'] = self.getCurrentValue(row['SYMBOL'], self.fillDate)
         return row
-
-    def readData(self, code, startDate='01-01-2018'):
-        s=[]
+    
+    def readData(self, code, startDate='2018-01-01'):
+        s=''
         for c in code:
-            s.append(c + '.SA')
-        # importar dados para o DataFrame
-        return web.DataReader(s, data_source='yahoo', start=startDate)['Close']
+            s += c + '.SA '
 
-    def readUSData(self, code, startDate='01-01-2018'):
-        # importar dados para o DataFrame
-        return web.DataReader(code, data_source='yahoo', start=startDate)['Close']
+        tks = yf.Tickers(s)
+        dfs = tks.history(start=startDate)[['Close']]
+        dfs.columns = dfs.columns.droplevel()
+        return dfs
 
-    def getHistory(self, code, start='01-01-2018'):
+    def readUSData(self, code, startDate='2018-01-01'):
+        s=''
+        for c in code:
+            s += c + ' '
+
+        tks = yf.Tickers(s)
+        dfs = tks.history(start=startDate)[['Close']]
+        dfs.columns = dfs.columns.droplevel()
+        return dfs
+
+    def getHistory(self, code, start='2018-01-01'):
         return self.df.loc[start:][code]
 
     def getCurrentValue(self, code, date=None):
@@ -86,94 +101,150 @@ class PriceReader:
 
 #     -------------------------------------------------------------------------------------------------
 
-import requests
-class DividendReader:
-    fiiUrl = 'https://www.fundamentus.com.br/fii_proventos.php?papel={}&tipo=2'
-    stockUrl = 'https://www.fundamentus.com.br/proventos.php?papel={}&tipo=2'
-    notFound = 'Nenhum provento encontrado'
-    header = {
-            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.75 Safari/537.36",
-            "X-Requested-With": "XMLHttpRequest"
-        }
+class ADVFN_Page:
+    urlDict = [{ 'url': 'https://br.advfn.com/bolsa-de-valores/bovespa/{}/dividendos/historico-de-proventos', 'index': 5 },
+               { 'url': 'https://br.advfn.com/bolsa-de-valores/bovespa/{}/dividendos', 'index': 6}]
+    
+    def read(self, ticker):
+        res = pd.DataFrame()
+        for attempt in range(2):
+            url = self.urlDict[attempt]['url'].format(ticker)
+            r = requests.get(url, headers=http_header)
+            # print(url, urlDict[attempt]['index'])
+            try:
+                rawTable = pd.read_html(r.text, thousands='.',decimal=',')[self.urlDict[attempt]['index']]
+                # display(rawTable)
+                if(len(rawTable.columns) < 5):
+                    raise
+            except:
+                continue
 
-    def __init__(self, dataFrame):
+            res = rawTable
+            if ('Mês de Referência' in res.columns):
+                res.rename(columns={'Mês de Referência':'Tipo do Provento'}, inplace=True)
+                res['Tipo do Provento'] = 'Dividendo'
+            
+            res.rename(columns={'Tipo do Provento':'OPERATION', 'Data-Com':'DATE', 'Pagamento':'PAYDATE', 'Valor':'PRICE', 'Dividend Yield':'YIELD'}, inplace=True)
+            break
+
+        return res
+
+class Fundamentus_Page:
+    urlDict = [ { 'url': 'https://www.fundamentus.com.br/proventos.php?papel={}&tipo=2', 'index': 0 },
+                { 'url': 'https://www.fundamentus.com.br/fii_proventos.php?papel={}&tipo=2', 'index': 0}]
+    
+    def read(self, ticker):
+        res = pd.DataFrame()
+        # if (ticker != 'SMLS3'):
+        #     return res
+        for attempt in range(2):
+            url = self.urlDict[attempt]['url'].format(ticker)
+            r = requests.get(url, headers=http_header)
+            # print(url, self.urlDict[attempt]['index'])
+            try:
+                rawTable = pd.read_html(r.text, thousands='.',decimal=',')[self.urlDict[attempt]['index']]
+                # print(rawTable)
+                if(len(rawTable.columns) < 4):
+                    raise
+            except:
+                continue
+
+            res = rawTable
+            if('Por quantas ações' in res.columns):
+                res['Valor'] /= res['Por quantas ações']
+
+            if ('Última Data Com' in res.columns):
+                res.rename(columns={'Última Data Com':'Data'}, inplace=True)
+
+            res.rename(columns={'Tipo':'OPERATION', 'Data':'DATE', 'Data de Pagamento':'PAYDATE', 'Valor':'PRICE'}, inplace=True)
+            break
+        # print(res)
+        return res
+    
+class DividendReader:
+    def __init__(self, dataFrame, startDate='2018-01-01'):
         self.brTickerList = dataFrame[dataFrame['TYPE'] == 'Ação']['SYMBOL'].unique()
         self.usTickerList = dataFrame[dataFrame['TYPE'] == 'STOCK']['SYMBOL'].unique()
         self.fiiList = dataFrame[dataFrame['TYPE'] == 'FII']['SYMBOL'].unique()
+        self.startDate=startDate
         self.df = pd.DataFrame(columns=['SYMBOL', 'PRICE', 'PAYDATE'])
+    
+    def __init__(self, brTickers, fiiTickers, usTickers, startDate='2018-01-01'):
+        self.brTickerList = brTickers
+        self.usTickerList = usTickers
+        self.fiiList = fiiTickers
+        self.startDate = startDate
+        self.df = pd.DataFrame(columns=['SYMBOL', 'DATE','PRICE', 'PAYDATE'])
 
-    def load(self):        
-        if(len(self.brTickerList) > 0):
-            self.df = self.df.append(self.loadData(self.brTickerList, self.stockUrl))
+    def load(self):
+        if(self.brTickerList != None and len(self.brTickerList) > 0):
+            self.df = self.df.append(self.loadData(self.brTickerList))
         
-        if(len(self.fiiList) > 0):
-            self.df = self.df.append(self.loadData(self.fiiList, self.fiiUrl))
+        if(self.fiiList != None and  len(self.fiiList) > 0):
+            self.df = self.df.append(self.loadData(self.fiiList))
 
-        if(len(self.usTickerList) > 0):
+        if(self.usTickerList != None and len(self.usTickerList) > 0):
             self.df = self.df.append(self.loadData(self.usTickerList))
 
         if(not self.df.empty):
             self.df = self.df.sort_values(by=['DATE', 'SYMBOL'])
-            self.df.set_index("DATE", inplace = True)
+            self.df = self.df[self.df['DATE'] >= self.startDate]
+            self.df.set_index('DATE', inplace = True)
             self.df = self.df[['SYMBOL', 'PRICE', 'PAYDATE']]
-            # display(self.df.tail(20))
+            # print(self.df.tail(5))
 
-    def loadData(self, paperList, baseUrl=None):
+    def loadData(self, paperList):
         tb = pd.DataFrame()
+        # pageObj = ADVFN_Page()
+        pageObj = Fundamentus_Page()
+
         for paper in paperList:
-            url = baseUrl.format(paper)
-            # print(f'\n\nSearching: {url}')
-            r = requests.get(url, headers=self.header)
-            if(self.notFound in r.text):
-                # print(self.notFound )
+            rawTable = pageObj.read(paper)
+            if(rawTable.empty):
                 continue
 
-            rawTable = pd.read_html(r.text, thousands='.',decimal=',')[0]
-            if('fii' in baseUrl):
-                rawTable.columns = ['DATE', 'OPERATION', 'PAYDATE', 'PRICE'] 
-
+            # print(rawTable)
             rawTable['SYMBOL'] = paper
-            if('Por quantas ações' in rawTable.columns):
-                rawTable['PRICE'] /= rawTable['Por quantas ações']
-                # Discount a taxe of 15% when is JCP (Juros sobre capital proprio)
-                rawTable['PRICE'] = np.where(rawTable['OPERATION'] == 'DIVIDENDO',    rawTable['PRICE'],    rawTable['PRICE'] * 0.85 )
-                
 
-            rawTable = rawTable[['SYMBOL', 'DATE','PRICE', 'PAYDATE']]
-
-            rawTable['PAYDATE'] = np.where(rawTable['PAYDATE'] == '-',\
-                            rawTable['DATE'], rawTable['PAYDATE'])
-            
+            # Discount a taxe of 15% when is JCP (Juros sobre capital proprio)
+            rawTable['PRICE'] = np.where(rawTable['OPERATION'] == 'JRS CAP PROPRIO', rawTable['PRICE'] * 0.85 , rawTable['PRICE'])
+            rawTable['PAYDATE'] = np.where(rawTable['PAYDATE'] == '-', rawTable['DATE'], rawTable['PAYDATE'])
             rawTable['PAYDATE'] = pd.to_datetime(rawTable['PAYDATE'], format='%d/%m/%Y')
             rawTable['DATE'] = pd.to_datetime(rawTable['DATE'], format='%d/%m/%Y')
+            rawTable = rawTable[['SYMBOL', 'DATE','PRICE', 'PAYDATE']]
 
             # display(rawTable.tail())
             tb = tb.append(rawTable)
         return tb
 
     def getPeriod(self, paper, fromDate, toDate):
-        filtered = self.df[self.df['SYMBOL'] == paper].loc[fromDate:toDate]
-        return filtered[['SYMBOL', 'PRICE']]
+        filtered = self.df[self.df['SYMBOL'] == paper].loc[fromDate:toDate]        
+        return filtered[['SYMBOL', 'PRICE', 'PAYDATE']]
 
 #     -------------------------------------------------------------------------------------------------
 
 import yfinance as yf
 
 class YfinanceReader(DividendReader):
-    def loadData(self, paperList, baseUrl=None):
+    def loadData(self, paperList):
         res = pd.DataFrame()
-        paperList = paperList + '.SA' if baseUrl != None else paperList
         
         for paper in paperList:
-            data = pd.DataFrame(yf.Ticker(paper).dividends)
-            data['SYMBOL'] = paper
+            try:
+                data = pd.DataFrame(yf.Ticker(paper).dividends)
+            except:
+                continue
+
+            data['SYMBOL'] = paper.replace('.SA','')
             res = pd.concat([res,data], axis=0)
-        
-        res.index.rename('DATE', inplace=True)
-        res.columns = ['PRICE', 'SYMBOL']
-        res['PAYDATE'] = 0
+
+        res.reset_index(inplace=True)
+        res.columns = ['DATE', 'SYMBOL', 'PRICE']
+        res['PAYDATE'] = res['DATE']
+        res = res[['SYMBOL', 'DATE','PRICE', 'PAYDATE']]
+                
         # display(res[res['SYMBOL'] == 'CIEL3'])
-        return res[['SYMBOL', 'PRICE', 'PAYDATE']].reset_index()
+        return res
 
 #     -------------------------------------------------------------------------------------------------
 
@@ -182,6 +253,12 @@ class SplitsReader:
         self.brTickerList = dataFrame[dataFrame['TYPE'].isin(['Ação'])]['SYMBOL'].unique()
         self.brTickerList += '.SA'
         self.usTickerList = dataFrame[dataFrame['TYPE'].isin(['STOCK'])]['SYMBOL'].unique()
+        self.df = pd.DataFrame()
+
+    def __init__(self, brTickers, usTickers, startDate='2018-01-01'):
+        self.brTickerList = [ t + '.SA' for t in brTickers]
+        self.usTickerList = usTickers
+        self.startDate=startDate
         self.df = pd.DataFrame()
     
     def load(self):
@@ -223,28 +300,36 @@ class TableAccumulator:
         total = row.loc['AMOUNT']
         stType = row.loc['OPERATION']
         qty = row.loc['QUANTITY']
-
+        # buy
         if (stType == 'B'):
             operationValue = row.loc['PRICE'] * qty + row.loc['FEE']
             self.avr = ((self.avr * self.acumQty) + operationValue) 
             self.acumQty += qty
             self.avr /= self.acumQty
-
+        # Sell
         elif (stType == 'S'):
             self.acumQty += qty
             if (self.acumQty == 0):
                 self.acumProv = 0
-
+        # Amortization
+        elif (stType == 'A'):
+            operationValue = row.loc['PRICE'] * qty + row.loc['FEE']
+            self.avr = ((self.avr * self.acumQty) - operationValue) 
+            self.avr /= self.acumQty
+            total = row.loc['PRICE'] * self.acumQty
+            self.acumProv += total
+        # Split
         elif (stType == "SPLIT"):
             self.acumQty *= qty
             self.avr /= qty
-
+        # Dividend
         elif (stType == "D"):
             total = np.nan
             row['QUANTITY'] = self.acumQty
             if( self.acumQty > 0 ):
                 total = row.loc['PRICE'] * self.acumQty
                 self.acumProv += total
+        # 
         elif (stType == 'T'):
             total = np.nan
             row['QUANTITY'] = self.acumQty
@@ -265,15 +350,15 @@ class TableAccumulator:
 
     def Cash(self, row):
         stType = row.loc['OPERATION']
-        amount = row.loc['QUANTITY'] * row.loc['PRICE']
+        amount = row.loc['AMOUNT']
 
-        if (stType in ['S', 'W']):
+        if (stType in ['C', 'W']):
             self.cash += amount + row.loc['FEE']
 
-        elif (stType == 'B'):
-            self.cash -= amount - row.loc['FEE']
+        elif (stType in ['B', 'S']):
+            self.cash -= (amount + row.loc['FEE'])
         
-        elif (stType in ['D', 'T'] and row['acum_qty'] > 0):
+        elif (stType in ['D', 'T', 'A'] and row['acum_qty'] > 0):
             self.acumProv += amount 
             self.cash += amount
 
@@ -290,7 +375,7 @@ class Profit:
         profit = 0
         amount = self.amount + row.QUANTITY
         if(row.OPERATION == "B"):
-            self.pm = (row.PRICE * row.QUANTITY) / amount            
+            self.pm = (row.PRICE * row.QUANTITY) / amount
         else:
             profit = (self.pm - row.PRICE) * row.QUANTITY
             amount = self.amount - row.QUANTITY
@@ -337,7 +422,7 @@ class Portifolio:
         self.dtframe['PRICE'] = self.dtframe['PRICE'].fillna(self.dtframe['PM'])
         self.dtframe["MKT_VALUE"] = self.dtframe['PRICE'] * self.dtframe.QUANTITY
         
-        newLine = {'SYMBOL':'CASH', 'PM':cash, 'QUANTITY':1, 'DIVIDENDS':0, 'TYPE':'W', 'COST':cash, 'PRICE':cash, 'MKT_VALUE':cash}
+        newLine = {'SYMBOL':'CASH', 'PM':cash, 'QUANTITY':1, 'DIVIDENDS':0, 'TYPE':'C', 'COST':cash, 'PRICE':cash, 'MKT_VALUE':cash}
         self.dtframe = self.dtframe.append(pd.DataFrame(newLine, index=[0]))
         # self.dtframe.to_csv('H:/Git/Finances/log1.csv')
         
@@ -347,6 +432,8 @@ class Portifolio:
         self.dtframe['GAIN+DIV(%)'] = self.dtframe['GAIN+DIV($)'] / self.dtframe['COST'] * 100
         self.dtframe['ALLOCATION'] = (self.dtframe['MKT_VALUE'] / self.dtframe['MKT_VALUE'].sum()) * 100
         self.dtframe = self.dtframe.replace([np.inf, -np.inf], np.nan).fillna(0)
+
+        self.dtframe = self.dtframe[self.dtframe['PM'] > 0]
 
         self.dtframe = self.dtframe[['SYMBOL', 'PM', 'PRICE', 'QUANTITY', 'COST', 'MKT_VALUE', 'DIVIDENDS', 'GAIN($)', 'GAIN+DIV($)', 'GAIN(%)', 'GAIN+DIV(%)', 'ALLOCATION']]
         self.dtframe.set_index('SYMBOL', inplace=True)
@@ -503,30 +590,30 @@ class Taxation:
 #     -------------------------------------------------------------------------------------------------
 
 class PerformanceViewer:
-        def __init__(self, *args):
-                self.pf = pd.DataFrame(columns = ['Item', 'USD', 'BRL', '%'])
-                if (len(args) == 2 and isinstance(args[0], pd.DataFrame)):
-                        row = args[0].set_index('Date').loc[args[1]]
-                        self.buildTable(row['Equity'], row['Cost'], row['Expense'], row['paperProfit'], row['Profit'], row['Div'], row['TotalProfit'])
-                elif(isinstance(args[0], PerformanceBlueprint)):
-                        p = args[0]
-                        self.buildTable(p.equity, p.cost, p.expense, p.paperProfit, p.realizedProfit, p.div, p.profit, p.exchangeRatio)
+    def __init__(self, *args):
+        self.pf = pd.DataFrame(columns = ['Item', 'USD', 'BRL', '%'])
+        if (len(args) == 2 and isinstance(args[0], pd.DataFrame)):
+            row = args[0].set_index('Date').loc[args[1]]
+            self.buildTable(row['Equity'], row['Cost'], row['Expense'], row['paperProfit'], row['Profit'], row['Div'], row['TotalProfit'])
+        elif(isinstance(args[0], PerformanceBlueprint)):
+            p = args[0]
+            self.buildTable(p.equity, p.cost, p.expense, p.paperProfit, p.realizedProfit, p.div, p.profit, p.exchangeRatio)
 
-        def buildTable(self, equity, cost, expense, paperProfit, profit, div, totalProfit, exchangeRatio=0.22):
-                self.pf.loc[len(self.pf)] = ['Equity          ' , equity,equity, equity/cost]
-                self.pf.loc[len(self.pf)] = ['Cost            ' , cost,cost, 1]
-                self.pf.loc[len(self.pf)] = ['Expenses        ' , expense,expense, expense/cost]
-                self.pf.loc[len(self.pf)] = ['Paper profit    ' , paperProfit,paperProfit, paperProfit/cost]
-                self.pf.loc[len(self.pf)] = ['Realized profit ' , profit,profit, profit/cost]
-                self.pf.loc[len(self.pf)] = ['Dividends       ' , div,div, div/cost]
-                self.pf.loc[len(self.pf)] = ['Total Profit    ' , totalProfit,totalProfit, totalProfit/cost]
-                self.pf.loc[:, '%'] *= 100
-                self.pf.loc[:, 'BRL'] /= exchangeRatio
-                self.pf.set_index('Item', inplace=True)
+    def buildTable(self, equity, cost, expense, paperProfit, profit, div, totalProfit, exchangeRatio=0.22):
+        self.pf.loc[len(self.pf)] = ['Equity          ' , equity,equity, equity/cost]
+        self.pf.loc[len(self.pf)] = ['Cost            ' , cost,cost, 1]
+        self.pf.loc[len(self.pf)] = ['Expenses        ' , expense,expense, expense/cost]
+        self.pf.loc[len(self.pf)] = ['Paper profit    ' , paperProfit,paperProfit, paperProfit/cost]
+        self.pf.loc[len(self.pf)] = ['Realized profit ' , profit,profit, profit/cost]
+        self.pf.loc[len(self.pf)] = ['Dividends       ' , div,div, div/cost]
+        self.pf.loc[len(self.pf)] = ['Total Profit    ' , totalProfit,totalProfit, totalProfit/cost]
+        self.pf.loc[:, '%'] *= 100
+        self.pf.loc[:, 'BRL'] /= exchangeRatio
+        self.pf.set_index('Item', inplace=True)
 
-        def show(self):
-                format_dict = { 'USD': ' {:^,.2f}', 'BRL': ' {:^,.2f}', '%': ' {:>.1f}%' }
-                return self.pf.style.applymap(color_negative_red).format(format_dict)
+    def show(self):
+        format_dict = { 'USD': ' {:^,.2f}', 'BRL': ' {:^,.2f}', '%': ' {:>.1f}%' }
+        return self.pf.style.applymap(color_negative_red).format(format_dict)
 
 #     -------------------------------------------------------------------------------------------------
 
@@ -535,10 +622,6 @@ import string
 import re
 
 class CompanyListReader:
-        header = {
-                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.75 Safari/537.36",
-                "X-Requested-With": "XMLHttpRequest"
-        }
         deprecatedList = ['SMLE3', 'TBLE3', 'VNET3']
 
         def __init__(self):
@@ -548,13 +631,13 @@ class CompanyListReader:
         
         def loadInfomoney(self):
                 url = 'https://www.infomoney.com.br/minhas-financas/confira-o-cnpj-das-acoes-negociadas-em-bolsa-e-saiba-como-declarar-no-imposto-de-renda/'
-                r = requests.get(url, headers=self.header)
+                r = requests.get(url, headers=http_header)
                 rawTable = pd.read_html(r.text, thousands='.',decimal=',')[0]
                 return rawTable
 
         def loadOceans(self):
                 url = 'https://www.oceans14.com.br/acoes/'
-                r = requests.get(url, headers=self.header)
+                r = requests.get(url, headers=http_header)
                 rawTable = pd.read_html(r.text, thousands='.',decimal=',')[0]
                 return rawTable
 
@@ -562,14 +645,14 @@ class CompanyListReader:
                 pageAmount = 10
                 rawTable = pd.DataFrame()
                 url = 'https://www.guiainvest.com.br/lista-acoes/default.aspx?listaacaopage='
-                r = requests.get(url, headers=self.header)
+                r = requests.get(url, headers=http_header)
                 df = pd.read_html(r.text, thousands='.',decimal=',')[0]
                 res = re.search('Registros\s\d+\s-\s(\d+)\sde\s(\d+)', df.to_string())
                 if (res):
                         pageAmount = ceil(int(res.group(2))/ int(res.group(1)))
 
                 for i in range(1, pageAmount):
-                        r = requests.get(url + str(i), headers=self.header)
+                        r = requests.get(url + str(i), headers=http_header)
                         rawTable = rawTable.append(pd.read_html(r.text, thousands='.',decimal=',')[0].drop(['Unnamed: 0', 'Atividade Principal'], axis=1))
 
                 return rawTable.reset_index(drop=True)
@@ -578,7 +661,7 @@ class CompanyListReader:
                 rawTable = pd.DataFrame()
                 url = 'https://br.advfn.com/bolsa-de-valores/bovespa/'
                 for pg in string.ascii_uppercase:    
-                        r = requests.get(url + pg, headers=self.header)
+                        r = requests.get(url + pg, headers=http_header)
                         rawTable = rawTable.append(pd.read_html(r.text, thousands='.',decimal=',')[0])
 
                 return rawTable[['Ação',	'Unnamed: 1']].dropna()
@@ -594,7 +677,7 @@ class CompanyListReader:
                         return row
 
                 url = 'https://www.fundamentus.com.br/detalhes.php?papel='
-                r = requests.get(url, headers=self.header)
+                r = requests.get(url, headers=http_header)
                 rawTable = pd.read_html(r.text, thousands='.',decimal=',')[0].fillna('Unown')
                 rawTable.columns = ['Paper', 'Company', 'FullName']
                 rawTable = rawTable.apply(lambda x: x.str.upper())
@@ -615,4 +698,8 @@ def color_negative_red(val):
 if __name__ == "__main__":
     prcReader = PriceReader(None, ['EA', 'CCJ'] )
     prcReader.load()
+    print(prcReader.df)
+    print(prcReader.brlIndex)
     print(prcReader.getCurrentValue('CCJ', '2018-02-14'))
+
+    # YfinanceReader(None, None, None).loadData(['CCJ', 'CSCO', 'EA'])
