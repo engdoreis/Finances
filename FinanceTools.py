@@ -218,7 +218,7 @@ class DividendReader:
         return tb
 
     def getPeriod(self, paper, fromDate, toDate):
-        filtered = self.df[self.df['SYMBOL'] == paper].loc[fromDate:toDate]
+        filtered = self.df[self.df['SYMBOL'] == paper].loc[fromDate:toDate]        
         return filtered[['SYMBOL', 'PRICE', 'PAYDATE']]
 
 #     -------------------------------------------------------------------------------------------------
@@ -239,7 +239,7 @@ class YfinanceReader(DividendReader):
             res = pd.concat([res,data], axis=0)
 
         res.reset_index(inplace=True)
-        res.columns = ['DATE', 'PRICE', 'SYMBOL']
+        res.columns = ['DATE', 'SYMBOL', 'PRICE']
         res['PAYDATE'] = res['DATE']
         res = res[['SYMBOL', 'DATE','PRICE', 'PAYDATE']]
                 
@@ -312,6 +312,11 @@ class TableAccumulator:
             if (self.acumQty == 0):
                 self.acumProv = 0
 
+        elif (stType == 'A'):
+            operationValue = row.loc['PRICE'] * qty + row.loc['FEE']
+            self.avr = ((self.avr * self.acumQty) - operationValue) 
+            self.avr /= self.acumQty
+
         elif (stType == "SPLIT"):
             self.acumQty *= qty
             self.avr /= qty
@@ -344,7 +349,7 @@ class TableAccumulator:
         stType = row.loc['OPERATION']
         amount = row.loc['AMOUNT']
 
-        if (stType in ['C', 'W']):
+        if (stType in ['C', 'W', 'A']):
             self.cash += amount + row.loc['FEE']
 
         elif (stType in ['B', 'S']):
