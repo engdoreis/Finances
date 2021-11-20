@@ -300,33 +300,36 @@ class TableAccumulator:
         total = row.loc['AMOUNT']
         stType = row.loc['OPERATION']
         qty = row.loc['QUANTITY']
-
+        # buy
         if (stType == 'B'):
             operationValue = row.loc['PRICE'] * qty + row.loc['FEE']
             self.avr = ((self.avr * self.acumQty) + operationValue) 
             self.acumQty += qty
             self.avr /= self.acumQty
-
+        # Sell
         elif (stType == 'S'):
             self.acumQty += qty
             if (self.acumQty == 0):
                 self.acumProv = 0
-
+        # Amortization
         elif (stType == 'A'):
             operationValue = row.loc['PRICE'] * qty + row.loc['FEE']
             self.avr = ((self.avr * self.acumQty) - operationValue) 
             self.avr /= self.acumQty
-
+            total = row.loc['PRICE'] * self.acumQty
+            self.acumProv += total
+        # Split
         elif (stType == "SPLIT"):
             self.acumQty *= qty
             self.avr /= qty
-
+        # Dividend
         elif (stType == "D"):
             total = np.nan
             row['QUANTITY'] = self.acumQty
             if( self.acumQty > 0 ):
                 total = row.loc['PRICE'] * self.acumQty
                 self.acumProv += total
+        # 
         elif (stType == 'T'):
             total = np.nan
             row['QUANTITY'] = self.acumQty
@@ -349,13 +352,13 @@ class TableAccumulator:
         stType = row.loc['OPERATION']
         amount = row.loc['AMOUNT']
 
-        if (stType in ['C', 'W', 'A']):
+        if (stType in ['C', 'W']):
             self.cash += amount + row.loc['FEE']
 
         elif (stType in ['B', 'S']):
             self.cash -= (amount + row.loc['FEE'])
         
-        elif (stType in ['D', 'T'] and row['acum_qty'] > 0):
+        elif (stType in ['D', 'T', 'A'] and row['acum_qty'] > 0):
             self.acumProv += amount 
             self.cash += amount
 
@@ -372,7 +375,7 @@ class Profit:
         profit = 0
         amount = self.amount + row.QUANTITY
         if(row.OPERATION == "B"):
-            self.pm = (row.PRICE * row.QUANTITY) / amount            
+            self.pm = (row.PRICE * row.QUANTITY) / amount
         else:
             profit = (self.pm - row.PRICE) * row.QUANTITY
             amount = self.amount - row.QUANTITY
