@@ -156,7 +156,8 @@ class Fundamentus_Page:
             if ('Última Data Com' in res.columns):
                 res.rename(columns={'Última Data Com':'Data'}, inplace=True)
 
-            res.rename(columns={'Tipo':'OPERATION', 'Data':'DATE', 'Data de Pagamento':'PAYDATE', 'Valor':'PRICE'}, inplace=True)
+            res.rename(columns={'Tipo':'OPERATION', 'Data':'DATE', 'Data de Pagamento':'PAYDATE', 'Valor':'PRICE', 'Tipo':'OPERATION'}, inplace=True)
+            res['OPERATION'] = np.where(res['OPERATION'] == 'Amortização', 'A' , 'D')
             break
         # print(res)
         return res
@@ -167,14 +168,14 @@ class DividendReader:
         self.usTickerList = dataFrame[dataFrame['TYPE'] == 'STOCK']['SYMBOL'].unique()
         self.fiiList = dataFrame[dataFrame['TYPE'] == 'FII']['SYMBOL'].unique()
         self.startDate=startDate
-        self.df = pd.DataFrame(columns=['SYMBOL', 'PRICE', 'PAYDATE'])
+        self.df = pd.DataFrame(columns=['SYMBOL', 'PRICE', 'PAYDATE', 'OPERATION'])
     
     def __init__(self, brTickers, fiiTickers, usTickers, startDate='2018-01-01'):
         self.brTickerList = brTickers
         self.usTickerList = usTickers
         self.fiiList = fiiTickers
         self.startDate = startDate
-        self.df = pd.DataFrame(columns=['SYMBOL', 'DATE','PRICE', 'PAYDATE'])
+        self.df = pd.DataFrame(columns=['SYMBOL', 'PRICE', 'PAYDATE', 'OPERATION'])
 
     def load(self):
         if(self.brTickerList != None and len(self.brTickerList) > 0):
@@ -190,7 +191,7 @@ class DividendReader:
             self.df = self.df.sort_values(by=['DATE', 'SYMBOL'])
             self.df = self.df[self.df['DATE'] >= self.startDate]
             self.df.set_index('DATE', inplace = True)
-            self.df = self.df[['SYMBOL', 'PRICE', 'PAYDATE']]
+            self.df = self.df[['SYMBOL', 'PRICE', 'PAYDATE', 'OPERATION']]
             # print(self.df.tail(5))
 
     def loadData(self, paperList):
@@ -206,20 +207,21 @@ class DividendReader:
             # print(rawTable)
             rawTable['SYMBOL'] = paper
 
-            # Discount a taxe of 15% when is JCP (Juros sobre capital proprio)
+            # Discount a tax of 15% when is JCP (Juros sobre capital proprio)
             rawTable['PRICE'] = np.where(rawTable['OPERATION'] == 'JRS CAP PROPRIO', rawTable['PRICE'] * 0.85 , rawTable['PRICE'])
             rawTable['PAYDATE'] = np.where(rawTable['PAYDATE'] == '-', rawTable['DATE'], rawTable['PAYDATE'])
             rawTable['PAYDATE'] = pd.to_datetime(rawTable['PAYDATE'], format='%d/%m/%Y')
             rawTable['DATE'] = pd.to_datetime(rawTable['DATE'], format='%d/%m/%Y')
-            rawTable = rawTable[['SYMBOL', 'DATE','PRICE', 'PAYDATE']]
+            rawTable = rawTable[['SYMBOL', 'DATE','PRICE', 'PAYDATE', 'OPERATION']]
 
             # display(rawTable.tail())
             tb = tb.append(rawTable)
+        # print(tb)
         return tb
 
     def getPeriod(self, paper, fromDate, toDate):
         filtered = self.df[self.df['SYMBOL'] == paper].loc[fromDate:toDate]        
-        return filtered[['SYMBOL', 'PRICE', 'PAYDATE']]
+        return filtered[['SYMBOL', 'PRICE', 'PAYDATE', 'OPERATION']]
 
 #     -------------------------------------------------------------------------------------------------
 
@@ -242,6 +244,7 @@ class YfinanceReader(DividendReader):
         res.columns = ['DATE', 'SYMBOL', 'PRICE']
         res['PAYDATE'] = res['DATE']
         res = res[['SYMBOL', 'DATE','PRICE', 'PAYDATE']]
+        res['OPERATION'] = 'D'
                 
         # display(res[res['SYMBOL'] == 'CIEL3'])
         return res
@@ -313,11 +316,13 @@ class TableAccumulator:
                 self.acumProv = 0
         # Amortization
         elif (stType == 'A'):
-            operationValue = row.loc['PRICE'] * qty + row.loc['FEE']
-            self.avr = ((self.avr * self.acumQty) - operationValue) 
-            self.avr /= self.acumQty
-            total = row.loc['PRICE'] * self.acumQty
-            self.acumProv += total
+            total = np.nan
+            row['QUANTITY'] = self.acumQty
+            if( self.acumQty > 0 ):
+                operationValue = row.loc['PRICE'] * self.acumQty + row.loc['FEE']
+                self.avr = ((self.avr * self.acumQty) - operationValue) / self.acumQty
+                total = row.loc['PRICE'] * self.acumQty
+                self.acumProv += total
         # Split
         elif (stType == "SPLIT"):
             self.acumQty *= qty
@@ -696,10 +701,13 @@ def color_negative_red(val):
     return 'color: %s' % ('red' if val < 0 else 'green')
 
 if __name__ == "__main__":
-    prcReader = PriceReader(None, ['EA', 'CCJ'] )
-    prcReader.load()
-    print(prcReader.df)
-    print(prcReader.brlIndex)
-    print(prcReader.getCurrentValue('CCJ', '2018-02-14'))
+    # prcReader = PriceReader(None, ['EA', 'CCJ'] )
+    # prcReader.load()
+    # print(prcReader.df)
+    # print(prcReader.brlIndex)
+    # print(prcReader.getCurrentValue('CCJ', '2018-02-14'))
 
     # YfinanceReader(None, None, None).loadData(['CCJ', 'CSCO', 'EA'])
+    dr = DividendReader(['XPML11'], None, None)
+    dr.load()
+    print(dr.df)
