@@ -555,7 +555,7 @@ class Taxation:
 
     def Process(self, stockType='FII'):
 
-        if(not self.df['OPERATION'].str.contains(stockType).any()):
+        if(not self.df['TYPE'].str.contains(stockType).any()):
             return
 
         taxDF = self.SwingTrade(stockType)
