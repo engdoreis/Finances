@@ -179,15 +179,20 @@ class DividendReader:
 
     def load(self):
         if(self.brTickerList != None and len(self.brTickerList) > 0):
-            self.df = self.df.append(self.loadData(self.brTickerList))
+            # self.df = self.df.append(self.loadData(self.brTickerList))
+            self.df = pd.concat([self.df, self.loadData(self.brTickerList)])
         
         if(self.fiiList != None and  len(self.fiiList) > 0):
-            self.df = self.df.append(self.loadData(self.fiiList))
+            # self.df = self.df.append(self.loadData(self.fiiList))
+            self.df = pd.concat([self.df, self.loadData(self.fiiList)])
 
         if(self.usTickerList != None and len(self.usTickerList) > 0):
-            self.df = self.df.append(self.loadData(self.usTickerList))
+            # self.df = self.df.append(self.loadData(self.usTickerList))
+            self.df = pd.concat([self.df, self.loadData(self.usTickerList)])
 
         if(not self.df.empty):
+            self.df['DATE'] = pd.to_datetime(self.df['DATE'])
+            self.df['PAYDATE'] = pd.to_datetime(self.df['PAYDATE'])
             self.df = self.df.sort_values(by=['DATE', 'SYMBOL'])
             self.df = self.df[self.df['DATE'] >= self.startDate]
             self.df.set_index('DATE', inplace = True)
@@ -215,7 +220,8 @@ class DividendReader:
             rawTable = rawTable[['SYMBOL', 'DATE','PRICE', 'PAYDATE', 'OPERATION']]
 
             # display(rawTable.tail())
-            tb = tb.append(rawTable)
+            # tb = tb.append(rawTable)
+            tb = pd.concat([tb, rawTable])
         # print(tb)
         return tb
 
@@ -266,10 +272,12 @@ class SplitsReader:
     
     def load(self):
         if(len(self.brTickerList) > 0):
-            self.df = self.df.append(self.loadData(self.brTickerList))
+            # self.df = self.df.append(self.loadData(self.brTickerList))
+            self.df = pd.concat([self.df, self.loadData(self.brTickerList)])
         
         if(len(self.usTickerList) > 0):
-            self.df = self.df.append(self.loadData(self.usTickerList))
+            # self.df = self.df.append(self.loadData(self.usTickerList))
+            self.df = pd.concat([self.df, self.loadData(self.usTickerList)])
 
         self.df = self.df.sort_values(by=['DATE', 'SYMBOL'])
         self.df.set_index('DATE', inplace = True)
@@ -428,7 +436,8 @@ class Portifolio:
         self.dtframe["MKT_VALUE"] = self.dtframe['PRICE'] * self.dtframe.QUANTITY
         
         newLine = {'SYMBOL':'CASH', 'PM':cash, 'QUANTITY':1, 'DIVIDENDS':0, 'TYPE':'C', 'COST':cash, 'PRICE':cash, 'MKT_VALUE':cash}
-        self.dtframe = self.dtframe.append(pd.DataFrame(newLine, index=[0]))
+        # self.dtframe = self.dtframe.append(pd.DataFrame(newLine, index=[0]))
+        self.dtframe = pd.concat([self.dtframe, pd.DataFrame(newLine, index=[0])])
         # self.dtframe.to_csv('H:/Git/Finances/log1.csv')
         
         self.dtframe['GAIN($)'] = self.dtframe['MKT_VALUE'] - self.dtframe['COST']
@@ -657,8 +666,9 @@ class CompanyListReader:
                         pageAmount = ceil(int(res.group(2))/ int(res.group(1)))
 
                 for i in range(1, pageAmount):
-                        r = requests.get(url + str(i), headers=http_header)
-                        rawTable = rawTable.append(pd.read_html(r.text, thousands='.',decimal=',')[0].drop(['Unnamed: 0', 'Atividade Principal'], axis=1))
+                    r = requests.get(url + str(i), headers=http_header)
+                    # rawTable = rawTable.append(pd.read_html(r.text, thousands='.',decimal=',')[0].drop(['Unnamed: 0', 'Atividade Principal'], axis=1))
+                    rawTable = pd.concat([rawTable, pd.read_html(r.text, thousands='.',decimal=',')[0].drop(['Unnamed: 0', 'Atividade Principal'], axis=1)])
 
                 return rawTable.reset_index(drop=True)
 
@@ -666,8 +676,9 @@ class CompanyListReader:
                 rawTable = pd.DataFrame()
                 url = 'https://br.advfn.com/bolsa-de-valores/bovespa/'
                 for pg in string.ascii_uppercase:    
-                        r = requests.get(url + pg, headers=http_header)
-                        rawTable = rawTable.append(pd.read_html(r.text, thousands='.',decimal=',')[0])
+                    r = requests.get(url + pg, headers=http_header)
+                    # rawTable = rawTable.append(pd.read_html(r.text, thousands='.',decimal=',')[0])
+                    rawTable = pd.concat([rawTable, pd.read_html(r.text, thousands='.',decimal=',')[0]])
 
                 return rawTable[['Ação',	'Unnamed: 1']].dropna()
 

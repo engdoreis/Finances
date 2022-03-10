@@ -112,7 +112,8 @@ def ReadOrders(indir='d:/Investing/Notas_Clear', outfile='operations.csv', pdfTy
         diff = diff[diff['_merge'] == 'left_only']
         diff = diff.iloc[:,:8]
         
-        existentDF.append(diff).to_csv(outPath, index=False)
+        # existentDF.append(diff).to_csv(outPath, index=False)
+        pd.concat([existentDF, diff]).to_csv(outPath, index=False)
         os.remove(tempFile)
     except:
         os.rename(tempFile, outPath)

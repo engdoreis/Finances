@@ -56,4 +56,28 @@ test = Test_Taxation()
 test.process_fii()
 test.process_stocks()
 
-print("Test ok!")
+print("Taxation Test ok!")
+
+
+class Test_DividendReader:
+    def __init__(self):
+        self.ref_br_stocks = pd.read_csv('test/dividend_reader_br_stocks_ref.tsv', sep='\t')
+        self.ref_br_stocks['DATE'] = pd.to_datetime(self.ref_br_stocks['DATE'])
+        self.ref_br_stocks['PAYDATE'] = pd.to_datetime(self.ref_br_stocks['PAYDATE'])
+
+    def sanitize(self, df):
+        return df.loc['2021-06-01':'2021-09-30'].astype({'PRICE': np.float64}).reset_index()
+        
+    def load_br_tickers(self):
+        self.dr = DividendReader(['BBDC3', 'ITUB3'], None, None, '2021-06-01')
+        self.dr.load()
+        df = self.sanitize(self.dr.df)
+        # df.to_csv('test/dividend_reader_br_stocks_ref.tsv', sep='\t')
+        # print(df)
+        # print(self.ref_br_stocks)
+        assert_frame_equal(df, self.ref_br_stocks) 
+
+test = Test_DividendReader()
+test.load_br_tickers()
+
+print("Dividend reader Test ok!")
