@@ -118,7 +118,7 @@ def ReadOrders(indir='d:/Investing/Notas_Clear', outfile='operations.csv', pdfTy
     except:
         os.rename(tempFile, outPath)
 
-def ReadTDStatement(inFile='d:/Investing/Notas_TD/transactions.csv', outfile='d:/Investing/TD.csv'):
+def ReadTDStatement(inDir='d:/Investing/Notas_TD', outfile='d:/Investing/TD.csv'):
     def DescriptionParser(row):
         desc = row['DESCRIPTION']
         if ('Bought' in desc):
@@ -127,11 +127,19 @@ def ReadTDStatement(inFile='d:/Investing/Notas_TD/transactions.csv', outfile='d:
             row['DESCRIPTION'] = 'S'
         if ('DIVIDEND' in desc):
             row['DESCRIPTION'] = 'D1'
-            row['QUANTITY'] = 1
+            row['QUANTITY'] = 0
+            row['PRICE'] = row['AMOUNT']
+        if ('GAIN DISTRIBUTION' in desc):
+            row['DESCRIPTION'] = 'D1'
+            row['QUANTITY'] = 0
+            row['PRICE'] = row['AMOUNT']
+        if ('TAX WITHHELD' in desc):
+            row['DESCRIPTION'] = 'D1'
+            row['QUANTITY'] = 0
             row['PRICE'] = row['AMOUNT']
         if ('W-8' in desc): #Dividend Taxes
             row['DESCRIPTION'] = 'T'
-            row['QUANTITY'] = 1
+            row['QUANTITY'] = 0
             row['PRICE'] = row['AMOUNT']
         if ('WIRE' in desc):
             row['DESCRIPTION'] = 'C'
@@ -139,17 +147,32 @@ def ReadTDStatement(inFile='d:/Investing/Notas_TD/transactions.csv', outfile='d:
             row['SYMBOL'] = 'CASH'
             row['QUANTITY'] = 1
             row['PRICE'] = row['AMOUNT']
+        if ('INTEREST' in desc):
+            row['DESCRIPTION'] = 'C'
+            row['TYPE'] = 'INTEREST'
+            row['SYMBOL'] = 'CASH'
+            row['QUANTITY'] = 1
+            row['PRICE'] = row['AMOUNT']
         return row
     
-    df = pd.read_csv(inFile)
-    df=df[~df['DATE'].str.contains('END OF FILE')].fillna(0)
-    df['TYPE'] = 'STOCK'
-    df['DATE'] = pd.to_datetime(df['DATE']).dt.strftime('%Y-%m-%d')
-    df = df[['SYMBOL', 'DATE', 'PRICE', 'QUANTITY', 'DESCRIPTION', 'TYPE', 'COMMISSION', 'AMOUNT']]
+    table = pd.DataFrame()
+    for file in sorted(glob(inDir + '/*.csv')):
+        df = pd.read_csv(file)
+        df=df[~df['DATE'].str.contains('END OF FILE')].fillna(0)
+        df['TYPE'] = 'STOCK'
+        df['DATE'] = pd.to_datetime(df['DATE']).dt.strftime('%Y-%m-%d')
+        df = df[['SYMBOL', 'DATE', 'PRICE', 'QUANTITY', 'DESCRIPTION', 'TYPE', 'COMMISSION', 'AMOUNT']]
 
-    df = df.apply(DescriptionParser, axis=1)
-    df = df.rename(columns={'DESCRIPTION':'OPERATION'})
-    df.to_csv(outfile, index=False)
+        df = df.apply(DescriptionParser, axis=1)
+        df = df.rename(columns={'DESCRIPTION':'OPERATION'})
+        if table.empty:
+            table = pd.concat([table, df])
+        else:
+            table = table.merge(df, how='outer', on=['SYMBOL', 'DATE', 'PRICE', 'QUANTITY', 'OPERATION', 'TYPE', 'COMMISSION', 'AMOUNT'],  suffixes=['','_'], indicator=True)
+            table.columns.drop(['_merge'])
+            table = table.loc[:,~table.columns.str.endswith('_')]
+
+    table.to_csv(outfile, index=False)
 
 if __name__ == "__main__":
     # start_time = time.time()
