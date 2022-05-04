@@ -1,8 +1,10 @@
 import re
+from unicodedata import decimal
 import pdfplumber
 import numpy as np
 from collections import namedtuple
 import pandas as pd
+from glob import glob
 
 def to_float(str, decimal=',', thousand='.'):
     return float(str.replace(thousand,'').replace(decimal,'.'))
@@ -41,7 +43,7 @@ class Clear(Broaker):
         for line in text.split('\n'):
             res = self.operation_re.search(line)
             if res:
-                print (res.group(0))
+                # print (res.group(0))
                 opType = 'S' if res.group(1)=='V' else 'B'
                 name = res.group(2).strip()
                 code = res.group(3).strip()
@@ -111,7 +113,7 @@ class Clear(Broaker):
         df['Irrf'] = irrf * df['Total'] / total
         df['Taxes'] = taxes * df['Total'] / total
         df['otherFee'] = otherFee * df['Total'] / total
-        df['Fee'] = df['LiqFee'] + df['EmolFee'] + df['OpFee'] + df['ExFee'] + df['CustodyFee'] + df['Irrf'] +  df['Taxes'] + df['otherFee']
+        df['Fee'] = df['LiqFee'] + df['EmolFee'] + df['OpFee'] + df['ExFee'] + df['CustodyFee'] + df['Taxes'] + df['otherFee']
         self.dtFrame = self.dtFrame.merge(df, how='outer')
 
 class TDAmeritrade(Broaker):
@@ -150,12 +152,131 @@ class TDAmeritrade(Broaker):
                 line_itens.append(order(res.group(1), date, 'Company', opType, 'Stock', qty, value, total,'sub',fee))
                 continue
         self.dtFrame = self.dtFrame.merge(pd.DataFrame(line_itens), how='outer')
+class Clear_proventos():
+    def __init__(self, input, outDir, name='default'):
+        self.input = input
+        self.output = outDir + '/' + name + '.csv'
+        self.dtFrame = pd.DataFrame(columns=list('Ativo Evento Quantidade ValorBruto ValorIR ValorLiquido Pagamento'.split()))
+        self.dividend_re = re.compile(r'DIVIDENDOS\s([\d]+)\s')
 
-if __name__ == "__main__":
+        self.single_evt = re.compile(r'([a-zA-Z/. ]+)\s([a-zA-Z/]+)\s([0-9,.]+)\s([0-9,.]+)\s([0-9,.]+)\s([0-9,.]+)\s([0-9/]+)')
+        
+    def process(self, page):
+        text = page.extract_text()
+
+        order = namedtuple('order', 'Ativo Evento Quantidade ValorBruto ValorIR ValorLiquido Pagamento')
+        line_itens = []
+        for line in text.split('\n'):
+            res = self.single_evt.search(line)
+            if res:
+                # print (res.group(0))
+                line_itens.append(order(res.group(1),res.group(2), res.group(3), res.group(4), res.group(5), res.group(6), res.group(7)))
+                continue
+            # print(line)
+
+        if len(line_itens) > 0:
+          self.dtFrame = self.dtFrame.merge(pd.DataFrame(line_itens), how='outer')
+
+    def finish(self):
+        self.dtFrame.to_csv(self.output, index=False, float_format='%.5f')
+
+class Clear_DivStatement():
+    def __init__(self, inputDir, outDir, name='default'):
+        self.inputDir = inputDir
+        self.output = outDir + '/' + name + '.tsv'
+        self.dtFrame = pd.DataFrame()
+        self.operation_map = {'PAGAMENTO DE AMORTIZAÇÃO': 'A1', 'JUROS-S/CAPITAL':'JCP1', 'DIVIDENDOS': 'D1', 'RENDIMENTO': 'R1', 'ACORDO COMERCIAL': 'I1', 'IRRF S/DAY TRADE': 'T1'}
+        
+    def concat_files(self):
+        files = sorted(glob(self.inputDir + '/*.csv'))
+        for file in files:
+            tmp =  pd.read_csv(file, sep=';', decimal=',', thousands='.')            
+            self.dtFrame = pd.concat([self.dtFrame, tmp.iloc[::-1]])
+        self.dtFrame.columns = 'DATE PAYDATE PRICE DESCRIPTION CASH'.split()
+        self.dtFrame['DATE'] = pd.to_datetime(self.dtFrame['DATE'], format='%d/%m/%Y')
+        self.dtFrame['PAYDATE'] = pd.to_datetime(self.dtFrame['PAYDATE'], format='%d/%m/%Y')
+        self.dtFrame.to_csv(self.output + '.tmp', index=False, sep='\t')
+
+
+    def description_parser(self, value):
+        op = qty = symbol = np.nan
+        spl_val = value.replace('JUROS S/CAPITAL', 'JUROS-S/CAPITAL').split()
+        try:
+            if bool(set(spl_val) & set(self.operation_map.keys())):
+                op = self.operation_map[spl_val[0]]
+                qty = int(spl_val[1].replace('.',''))
+                symbol = spl_val[-1]
+                raise
+            if 'PAGAMENTO DE AMORTIZAÇÃO' in value:
+                op = self.operation_map['PAGAMENTO DE AMORTIZAÇÃO']
+                symbol = spl_val[-1]
+                symbol = np.nan if symbol == 'AMORTIZAÇÃO' else symbol
+                raise
+            if 'ACORDO COMERCIAL' in value:
+                op = self.operation_map['ACORDO COMERCIAL']
+                qty = 1
+                symbol = 'CASH'
+                raise
+            if 'IRRF S/DAY TRADE' in value:
+                op = self.operation_map['IRRF S/DAY TRADE']
+                qty = 1
+                symbol = 'TAX'
+                raise
+            if 'NOTA' in value:
+                raise
+            if 'TED' in value:
+                raise
+            print(value)
+        except:
+            pass
+
+        return op, qty, symbol
+        
+    def process(self):
+        self.concat_files()
+        self.dtFrame['OPERATION'], self.dtFrame['QUANTITY'], self.dtFrame['SYMBOL'] = zip(*self.dtFrame['DESCRIPTION'].map(self.description_parser))
+
+        operation_order_map = {'A1': 0, 'R1': 1,  'D1': 2, 'JCP1': 3, 'T1': 4, 'I1': 5}
+        self.dtFrame['OPERATION_ORDER'] = self.dtFrame['OPERATION'].map(lambda x: operation_order_map.get(x, 10))
+        self.dtFrame.sort_values(['PAYDATE', 'OPERATION_ORDER'], inplace=True)
+
+        self.dtFrame['SYMBOL'] = self.dtFrame['SYMBOL'].fillna(self.dtFrame['SYMBOL'].shift(-1))
+        self.dtFrame['QUANTITY'] = self.dtFrame['QUANTITY'].fillna(self.dtFrame['QUANTITY'].shift(-1))
+        self.dtFrame['PRICE'] /= self.dtFrame['QUANTITY']
+        self.dtFrame = self.dtFrame.dropna()
+        self.dtFrame = self.dtFrame['SYMBOL DATE PRICE PAYDATE OPERATION QUANTITY DESCRIPTION'.split()]
+        self.dtFrame['DATE'] = pd.to_datetime(self.dtFrame['DATE'], format='%Y-%m-%d')
+        self.dtFrame['PAYDATE'] = pd.to_datetime(self.dtFrame['PAYDATE'], format='%Y-%m-%d')
+
+    def finish(self):
+        self.dtFrame.to_csv(self.output, index=False, sep='\t')
+        return self.dtFrame
+
+
+def Clear_DivStatementTest():
+    clear = Clear_DivStatement('/tmp/clear/', '/tmp/clear/', 'proventos')
+    clear.process()
+    clear.finish()
+
+
+def TDAmeritradeTest():
     pdf = pdfplumber.open('d:/Investing/Notas_TD/Trade_Confirmations.pdf', password='371')
     pgObj = TDAmeritrade('d:/Investing/', 'TD')
     for page in pdf.pages:
         pgObj.process(page)
 
     pgObj.finish()
+
+def ClearProventosTest():
+    pdf = pdfplumber.open('/home/doreis/Documents/IRPF/2022/2022_informes_redimento/clear/37165263802-2021-Proventos.pdf', password='371')
+    pgObj = Clear_proventos('/home/doreis/Documents/IRPF/2022/2022_informes_redimento/clear/', '/home/doreis/Documents/IRPF/2022/2022_informes_redimento/clear/', 'proventos')
+    for page in pdf.pages:
+        pgObj.process(page)
+
+    pgObj.finish()
+
+if __name__ == "__main__":
+    # TDAmeritradeTest()
+    # ClearProventosTest()
+    Clear_DivStatementTest()
 

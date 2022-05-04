@@ -154,7 +154,7 @@ class IRPF_BensDireitos:
         else:
             res = self.dtframe[[from_date, to_date, 'CNPJ', 'DESC']]
 
-        # res = res[res[to_date, 'QUANTITY'] > 0]
+        res = res[(res[to_date, 'QUANTITY'] > 0) | (res[from_date, 'QUANTITY'] > 0 )]
 
         currency = "BRL"
         if (res[to_date, 'COST'] != res[to_date, 'COST_BRL']).any():

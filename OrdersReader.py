@@ -60,7 +60,7 @@ def ReadPages(file, dir_, pdfType='Clear'):
 
     pgObj.finish()
 
-def ReadOrders(indir='d:/Investing/Notas_Clear', outfile='operations.csv', pdfType='Clear'):
+def ReadOrders(indir='d:/Investing/Notas_Clear', outfile='d:/Investing/operations.csv', pdfType='Clear'):
     inputDir = indir
     outputDir = indir + '/..'
     tmpDir = outputDir + '/tmpDir'
@@ -99,12 +99,11 @@ def ReadOrders(indir='d:/Investing/Notas_Clear', outfile='operations.csv', pdfTy
 
     print('Tickers merging...Done')
     
-    tempFile = outputDir + '/tmp_' + outfile
-    outPath = outputDir + '/' + outfile
+    tempFile = outfile + '.tmp'
     oOrg.dtFrame[['Paper', 'Date', 'Value', 'Qty', 'Type', 'Category', 'Fee', 'Company']].to_csv(tempFile, index=False)
 
     try:
-        existentDF = pd.read_csv(outPath)
+        existentDF = pd.read_csv(outfile)
         outDF = pd.read_csv(tempFile)
         existentDF=existentDF[existentDF['Date'].astype(bool)].dropna()
 
@@ -112,11 +111,13 @@ def ReadOrders(indir='d:/Investing/Notas_Clear', outfile='operations.csv', pdfTy
         diff = diff[diff['_merge'] == 'left_only']
         diff = diff.iloc[:,:8]
         
-        # existentDF.append(diff).to_csv(outPath, index=False)
-        pd.concat([existentDF, diff]).to_csv(outPath, index=False)
+        # existentDF.append(diff).to_csv(outfile, index=False)
+        new = pd.concat([existentDF, diff])
+        new['Qty'] = new['Qty'].astype(float).round(1)
+        new.to_csv(outfile, index=False)
         os.remove(tempFile)
     except:
-        os.rename(tempFile, outPath)
+        os.rename(tempFile, outfile)
 
 def ReadTDStatement(inDir='d:/Investing/Notas_TD', outfile='d:/Investing/TD.csv'):
     def DescriptionParser(row):
@@ -127,19 +128,19 @@ def ReadTDStatement(inDir='d:/Investing/Notas_TD', outfile='d:/Investing/TD.csv'
             row['DESCRIPTION'] = 'S'
         if ('DIVIDEND' in desc):
             row['DESCRIPTION'] = 'D1'
-            row['QUANTITY'] = 0
+            row['QUANTITY'] = 1
             row['PRICE'] = row['AMOUNT']
         if ('GAIN DISTRIBUTION' in desc):
             row['DESCRIPTION'] = 'D1'
-            row['QUANTITY'] = 0
+            row['QUANTITY'] = 1
             row['PRICE'] = row['AMOUNT']
         if ('TAX WITHHELD' in desc):
             row['DESCRIPTION'] = 'D1'
-            row['QUANTITY'] = 0
+            row['QUANTITY'] = 1
             row['PRICE'] = row['AMOUNT']
         if ('W-8' in desc): #Dividend Taxes
-            row['DESCRIPTION'] = 'T'
-            row['QUANTITY'] = 0
+            row['DESCRIPTION'] = 'T1'
+            row['QUANTITY'] = 1
             row['PRICE'] = row['AMOUNT']
         if ('WIRE' in desc):
             row['DESCRIPTION'] = 'C'
