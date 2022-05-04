@@ -112,7 +112,9 @@ def ReadOrders(indir='d:/Investing/Notas_Clear', outfile='d:/Investing/operation
         diff = diff.iloc[:,:8]
         
         # existentDF.append(diff).to_csv(outfile, index=False)
-        pd.concat([existentDF, diff]).to_csv(outfile, index=False)
+        new = pd.concat([existentDF, diff])
+        new['Qty'] = new['Qty'].astype(float).round(1)
+        new.to_csv(outfile, index=False)
         os.remove(tempFile)
     except:
         os.rename(tempFile, outfile)
@@ -126,19 +128,19 @@ def ReadTDStatement(inDir='d:/Investing/Notas_TD', outfile='d:/Investing/TD.csv'
             row['DESCRIPTION'] = 'S'
         if ('DIVIDEND' in desc):
             row['DESCRIPTION'] = 'D1'
-            row['QUANTITY'] = 0
+            row['QUANTITY'] = 1
             row['PRICE'] = row['AMOUNT']
         if ('GAIN DISTRIBUTION' in desc):
             row['DESCRIPTION'] = 'D1'
-            row['QUANTITY'] = 0
+            row['QUANTITY'] = 1
             row['PRICE'] = row['AMOUNT']
         if ('TAX WITHHELD' in desc):
             row['DESCRIPTION'] = 'D1'
-            row['QUANTITY'] = 0
+            row['QUANTITY'] = 1
             row['PRICE'] = row['AMOUNT']
         if ('W-8' in desc): #Dividend Taxes
-            row['DESCRIPTION'] = 'T'
-            row['QUANTITY'] = 0
+            row['DESCRIPTION'] = 'T1'
+            row['QUANTITY'] = 1
             row['PRICE'] = row['AMOUNT']
         if ('WIRE' in desc):
             row['DESCRIPTION'] = 'C'

@@ -1,3 +1,5 @@
+from curses import raw
+from socket import timeout
 from unicodedata import decimal
 from pandas_datareader import data as web
 import pandas as pd
@@ -11,12 +13,29 @@ http_header = {
         "X-Requested-With": "XMLHttpRequest"
     }
 
+class DataFrameMerger():
+    def __init__(self, df):
+        self.df = df
+    def append(self, new, on):
+        columns = self.df.columns.to_list()
+        # print(self.df.sort_values(by=['SYMBOL', 'DATE']).reset_index(drop=True))
+        # print(new.sort_values(by=['SYMBOL', 'DATE']).reset_index(drop=True))
+        self.df = self.df.merge(new, how='outer', on=on, suffixes=['','_'], indicator=True)
+        # print(self.df)
+        right_cols = [col for col in self.df.columns if col.endswith('_')]
+        for col in right_cols:
+            self.df[col[:-1]] = self.df[col[:-1]].fillna(self.df[col])
+        self.df = self.df[columns]
+        self.df = self.df.drop_duplicates()
+        # print(self.df.sort_values(by=['SYMBOL', 'DATE']).reset_index(drop=True))
+        return self.df
 class StockInfoCache():
     def __init__(self, cache_file):
         self.cache = Caching(cache_file)
         self.load_data()
 
     def is_updated(self):
+        # return False
         return self.cache.is_updated()
 
     def load_data(self):
@@ -30,17 +49,15 @@ class StockInfoCache():
     def append(self, data):
         self.cache.append(data)
     
-    def merge(self, data, sortby=['DATE']):
-        tmp = self.table
-        if not tmp.empty:
-            data = tmp.merge(data, how='outer', on=tmp.columns.to_list())
+    def merge(self, data, on=['SYMBOL', 'DATE'], sortby=['DATE']):
+        if not self.table.empty:
+            merger = DataFrameMerger(self.table)
+            data = merger.append(data, on=on)
         data = data.sort_values(by=sortby)
-        # print(data)
         self.cache.save(data)
         return self.load_data()
 
 #     -------------------------------------------------------------------------------------------------
-
 
 class PriceReader:
     def __init__(self, brTickerList, usTickerList, startDate='2018-01-01'):
@@ -82,7 +99,7 @@ class PriceReader:
             s += c + '.SA '
 
         tks = yf.Tickers(s)
-        dfs = tks.history(start=startDate)[['Close']]
+        dfs = tks.history(start=startDate, timeout=1000)[['Close']]
         dfs.columns = dfs.columns.droplevel()
         return dfs
 
@@ -138,57 +155,64 @@ class PriceReader:
 #     -------------------------------------------------------------------------------------------------
 
 class ADVFN_Page:
-    urlDict = [{ 'url': 'https://br.advfn.com/bolsa-de-valores/bovespa/{}/dividendos/historico-de-proventos', 'index': 5 },
-               { 'url': 'https://br.advfn.com/bolsa-de-valores/bovespa/{}/dividendos', 'index': 6}]
-    
+    def find_table(self, df):
+        for index in range(len(df)):
+            tmp = df[index]
+            if 'Valor' in tmp.columns:
+               return tmp
+        return pd.DataFrame()
+
     def read(self, ticker):
         res = pd.DataFrame()
-        for attempt in range(2):
-            url = self.urlDict[attempt]['url'].format(ticker)
-            r = requests.get(url, headers=http_header)
-            try:
-                rawTable = pd.read_html(r.text, thousands='.',decimal=',')[self.urlDict[attempt]['index']]
-                if(len(rawTable.columns) < 5):
-                    raise
-            except:
-                continue
+        url = 'https://br.advfn.com/bolsa-de-valores/bovespa/{}/dividendos/historico-de-proventos'.format(ticker)
+        r = requests.get(url, headers=http_header)
+        try:
+            rawTable = self.find_table(pd.read_html(r.text, thousands='.',decimal=','))
+            if rawTable.empty:
+                raise
+        except:
+            print(f'{ticker} not found at {url}')
+            return res
 
-            res = rawTable
-            if ('Mês de Referência' in res.columns):
-                res.rename(columns={'Mês de Referência':'Tipo do Provento'}, inplace=True)
-                res['Tipo do Provento'] = 'Dividendo'
-            
-            res.rename(columns={'Tipo do Provento':'OPERATION', 'Data-Com':'DATE', 'Pagamento':'PAYDATE', 'Valor':'PRICE', 'Dividend Yield':'YIELD'}, inplace=True)
-            break
+        res = rawTable
+        if ('Mês de Referência' in res.columns):
+            res.rename(columns={'Mês de Referência':'Tipo do Provento'}, inplace=True)
+            res['Tipo do Provento'] = 'Dividendo'
+        
+        res.rename(columns={'Tipo do Provento':'OPERATION', 'Data-Com':'DATE', 'Pagamento':'PAYDATE', 'Valor':'PRICE', 'Dividend Yield':'YIELD'}, inplace=True)
+        operation_map = {'AMORTIZAÇÃO': 'A', 'JUROS SOBRE CAPITAL PRÓPRIO':'JCP', 'DIVIDENDO': 'D', 'RENDIMENTOS': 'D', 'RENDIMENTO': 'D', 'DESDOBRAMENTO': 'SPLIT1'}
+        res['OPERATION'] = res['OPERATION'].map(lambda x : operation_map[x.upper()])
 
         return res
 
 class Fundamentus_Page:
-    urlDict = [ { 'url': 'https://www.fundamentus.com.br/proventos.php?papel={}&tipo=2', 'index': 0 },
-                { 'url': 'https://www.fundamentus.com.br/fii_proventos.php?papel={}&tipo=2', 'index': 0}]
+    urlDict =  { 'AÇÃO': 'https://www.fundamentus.com.br/proventos.php?papel={}&tipo=2', 
+                'FII': 'https://www.fundamentus.com.br/fii_proventos.php?papel={}&tipo=2'}
+    def __init__(self, type):
+        self.url = self.urlDict[type.upper()]
     
     def read(self, ticker):
         res = pd.DataFrame()
-        for attempt in range(2):
-            url = self.urlDict[attempt]['url'].format(ticker)
-            r = requests.get(url, headers=http_header)
-            try:
-                rawTable = pd.read_html(r.text, thousands='.',decimal=',')[self.urlDict[attempt]['index']]
-                if(len(rawTable.columns) < 4):
-                    raise
-            except:
-                continue
+        url = self.url.format(ticker)
+        r = requests.get(url, headers=http_header)
+        try:
+            rawTable = pd.read_html(r.text, thousands='.',decimal=',')[0]
+            if not 'Valor' in rawTable.columns:
+                raise
+        except:
+            return res
 
-            res = rawTable
-            if('Por quantas ações' in res.columns):
-                res['Valor'] /= res['Por quantas ações']
+        res = rawTable
+        if('Por quantas ações' in res.columns):
+            res['Valor'] /= res['Por quantas ações']
 
-            if ('Última Data Com' in res.columns):
-                res.rename(columns={'Última Data Com':'Data'}, inplace=True)
+        if ('Última Data Com' in res.columns):
+            res.rename(columns={'Última Data Com':'Data'}, inplace=True)
 
-            res.rename(columns={'Tipo':'OPERATION', 'Data':'DATE', 'Data de Pagamento':'PAYDATE', 'Valor':'PRICE', 'Tipo':'OPERATION'}, inplace=True)
-            res['OPERATION'] = np.where(res['OPERATION'] == 'Amortização', 'A' , 'D')
-            break
+        res.rename(columns={'Tipo':'OPERATION', 'Data':'DATE', 'Data de Pagamento':'PAYDATE', 'Valor':'PRICE', 'Tipo':'OPERATION'}, inplace=True)
+        operation_map = {'AMORTIZAÇÃO': 'A', 'JRS CAP PROPRIO':'JCP', 'DIVIDENDO': 'D', 'RENDIMENTO': 'D', 'DIVIDENDO MENSAL': 'D', 'JUROS':'JCP', 'JRS CAP PRÓPRIO':'JCP', 'JUROS MENSAL':'JCP'}
+        res['OPERATION'] = res['OPERATION'].map(lambda x : operation_map[x.upper()])
+
         return res
     
 class DividendReader:    
@@ -203,27 +227,30 @@ class DividendReader:
     def load(self):
         if not self.cache.is_updated():
             if(self.brTickerList != None and len(self.brTickerList) > 0):
-                self.df = pd.concat([self.df, self.loadData(self.brTickerList)])
+                self.df = self.loadData(self.brTickerList, type='ação')
             
             if(self.fiiList != None and  len(self.fiiList) > 0):
-                self.df = pd.concat([self.df, self.loadData(self.fiiList)])
+                tmp = self.loadData(self.fiiList, 'fii')
+                self.df = tmp if self.df.empty else pd.concat([self.df, tmp])
 
             if(self.usTickerList != None and len(self.usTickerList) > 0):
-                self.df = pd.concat([self.df, self.loadData(self.usTickerList)])
+                tmp = self.loadData(self.usTickerList, 'stock')
+                self.df = tmp if self.df.empty else pd.concat([self.df, tmp])
 
-            self.df = self.cache.merge(self.df, sortby=['DATE', 'SYMBOL'])
+            self.df = self.cache.merge(self.df, sortby=['DATE', 'SYMBOL'], on=['SYMBOL', 'DATE', 'OPERATION'])
         else:      
             self.df = self.cache.load_data()
 
         if not self.df.empty:
             self.df.set_index('DATE', inplace = True)
             self.df['PRICE'] -= self.df['TAX']
+            self.df['OPERATION'] = self.df['OPERATION'].map(lambda x: 'D' if x == 'JCP' else x )
             self.df = self.df[['SYMBOL', 'PRICE', 'PAYDATE', 'OPERATION']]
 
-    def loadData(self, paperList):
+    def loadData(self, paperList, type):
         tb = pd.DataFrame()
         # pageObj = ADVFN_Page()
-        pageObj = Fundamentus_Page()
+        pageObj = Fundamentus_Page(type)
 
         for paper in paperList:
             rawTable = pageObj.read(paper)
@@ -234,8 +261,8 @@ class DividendReader:
             rawTable['SYMBOL'] = paper
 
             # Discount a tax of 15% when is JCP (Juros sobre capital proprio)
-            rawTable['TAX'] = np.where(rawTable['OPERATION'] == 'JRS CAP PROPRIO', rawTable['PRICE'] * 0.15 , 0)
-            # rawTable['PRICE'] = np.where(rawTable['OPERATION'] == 'JRS CAP PROPRIO', rawTable['PRICE'] * 0.85 , rawTable['PRICE'])
+            rawTable['TAX'] = np.where(rawTable['OPERATION'] == 'JCP', rawTable['PRICE'] * 0.15 , 0)
+            
             rawTable['PAYDATE'] = np.where(rawTable['PAYDATE'] == '-', rawTable['DATE'], rawTable['PAYDATE'])
             rawTable['PAYDATE'] = pd.to_datetime(rawTable['PAYDATE'], format='%d/%m/%Y')
             rawTable['DATE'] = pd.to_datetime(rawTable['DATE'], format='%d/%m/%Y')
@@ -254,7 +281,7 @@ class DividendReader:
 import yfinance as yf
 
 class YfinanceReader(DividendReader):
-    def loadData(self, paperList):
+    def loadData(self, paperList, type=None):
         res = pd.DataFrame()
         
         for paper in paperList:
@@ -268,12 +295,11 @@ class YfinanceReader(DividendReader):
 
         res.reset_index(inplace=True)
         res.rename(columns={'Date':'DATE', 'Dividends':'PRICE'}, inplace=True)
+        res['PAYDATE'] = res['DATE'] = pd.to_datetime(res['DATE'], format='%Y/%m/%d')
         res = res[res['DATE'] >= self.startDate]
         # 30% tax
         res['TAX'] = res['PRICE'] * 0.3 * 0
         # print(res)
-        res['DATE'] = pd.to_datetime(res['DATE'], format='%Y/%m/%d')
-        res['PAYDATE'] = res['DATE']
         res = res[['SYMBOL', 'DATE','PRICE', 'PAYDATE', 'TAX']]
         res['OPERATION'] = 'D2'
         return res
@@ -356,7 +382,7 @@ class TableAccumulator:
                 self.acumProv = 0
 
         # Amortization
-        elif (stType == 'A'):
+        elif (stType in ['A']):
             total = np.nan
             row['QUANTITY'] = self.acumQty
             if( self.acumQty > 0 ):
@@ -371,7 +397,7 @@ class TableAccumulator:
             self.avr /= qty
 
         # Dividend
-        elif (stType in ["D"]):
+        elif (stType in ["D", 'R', 'JCP']):
             total = np.nan
             if row['QUANTITY'] == 0 and  self.acumQty != 0:
               # Means the price represents the total
@@ -379,13 +405,14 @@ class TableAccumulator:
 
             row['QUANTITY'] = self.acumQty
             if( self.acumQty > 0 ):
-                total = row.loc['PRICE'] * self.acumQty
+                total = row.loc['PRICE'] * row['QUANTITY']
                 self.acumProv += total
-        # Taxes
-        elif (stType in ['T', 'D1']):
-            total = row.loc['PRICE']
-            self.acumProv += total
 
+        # Dividend, Tax, Amortization
+        elif (stType in ["D1", 'R1', 'JCP1', 'T1', 'A1', 'I1']):
+            total = row.loc['PRICE'] * row['QUANTITY']
+            if stType != 'I1':
+              self.acumProv += total
 
         row['AMOUNT'] = total
         row['acumProv'] = self.acumProv
@@ -412,7 +439,7 @@ class TableAccumulator:
         elif (stType in ['B', 'S']):
             self.cash -= (amount + row.loc['FEE'])
         
-        elif ((stType in ['D1', 'T']) or (stType in ['D', 'A'] and row['acum_qty'] > 0)):
+        elif ((stType in ['D1', 'A1', 'R1', 'JCP1', 'T1', 'I1']) or (stType in ['D', 'A', 'R', 'JCP', 'T'] and row['acum_qty'] > 0)):
             # self.acumProv += amount 
             self.cash += amount
 
@@ -463,11 +490,13 @@ class Profit:
 #     -------------------------------------------------------------------------------------------------
 
 class Portifolio:
-    def __init__(self, priceReader, dFrame):
+    def __init__(self, priceReader, dFrame, recommended=None):
+        self.dtframe = dFrame.groupby(['SYMBOL']).apply(lambda x: x.tail(1) )
+
         dFrame = dFrame.sort_values(['PAYDATE', 'OPERATION'], ascending=[True, False])
         dFrame=dFrame.apply(TableAccumulator().Cash, axis=1)
         cash = dFrame.iloc[-1]['CASH']
-        self.dtframe = dFrame.groupby(['SYMBOL']).apply(lambda x: x.tail(1) )
+
         self.dtframe = self.dtframe[['SYMBOL', 'PM', 'acum_qty', 'acumProv', 'TYPE']]
         self.dtframe.columns = ['SYMBOL', 'PM', 'QUANTITY', 'DIVIDENDS', 'TYPE']
         self.dtframe["COST"] = self.dtframe.PM * self.dtframe['QUANTITY']
@@ -491,10 +520,31 @@ class Portifolio:
 
         self.dtframe = self.dtframe[self.dtframe['PM'] > 0]
 
-        self.dtframe = self.dtframe[['SYMBOL', 'PM', 'PRICE', 'QUANTITY', 'COST', 'MKT_VALUE', 'DIVIDENDS', 'GAIN($)', 'GAIN+DIV($)', 'GAIN(%)', 'GAIN+DIV(%)', 'ALLOCATION']]
+        self.dtframe = self.dtframe[['SYMBOL', 'PM', 'PRICE', 'QUANTITY', 'COST', 'MKT_VALUE', 'DIVIDENDS', 'GAIN($)', 'GAIN+DIV($)',\
+                                     'GAIN(%)', 'GAIN+DIV(%)', 'ALLOCATION']]
+
+        self.format = {'PRICE': '$ {:,.2f}', 'PM': '$ {:.2f}', 'QUANTITY': '{:>n}', 'COST': '$ {:,.2f}', 'MKT_VALUE': '$ {:,.2f}',\
+                       'DIVIDENDS': '$ {:,.2f}', 'GAIN($)': '$ {:,.2f}', 'GAIN+DIV($)': '$ {:,.2f}', 'GAIN(%)': '{:,.2f}%',\
+                       'GAIN+DIV(%)': '{:,.2f}%', 'ALLOCATION': '{:,.2f}%'}
+
+        self.extra_content(recommended)
+
         self.dtframe.set_index('SYMBOL', inplace=True)
-        self.format = {'PRICE': '$ {:,.2f}', 'PM': '$ {:.2f}', 'QUANTITY': '{:>n}', 'COST': '$ {:,.2f}', 'MKT_VALUE': '$ {:,.2f}', 'DIVIDENDS': '$ {:,.2f}',\
-                                    'GAIN($)': '$ {:,.2f}', 'GAIN+DIV($)': '$ {:,.2f}', 'GAIN(%)': '{:,.2f}%', 'GAIN+DIV(%)': '{:,.2f}%', 'ALLOCATION': '{:,.2f}%'}
+
+    def extra_content(self, recommended):
+        if recommended == None:
+            return
+
+        self.dtframe['TARGET'], self.dtframe['TOP_PRICE'], self.dtframe['PRIORITY'] = zip(*self.dtframe['SYMBOL'].map(lambda x: self.recommended(recommended, x)))
+        self.dtframe['BUY'] = (self.dtframe['QUANTITY'] * (self.dtframe['TARGET']/100 - self.dtframe['ALLOCATION']/100)) / (self.dtframe['ALLOCATION']/100)
+        format = {'TARGET': '{:,.2f}%', 'TOP_PRICE': '$ {:,.2f}', 'BUY': '{:,.1f}'}
+        self.format = {**self.format , **format}
+    
+    def recommended(self, recom, symbol):
+        for ticker in recom['Tickers']:
+            if symbol == ticker['Ticker']:
+                return float(ticker['Participation']) * 100, float(ticker['Top']), int(ticker['Priority'])
+        return 0, 0, 99
 
     def show(self):
         fdf = self.dtframe
@@ -524,7 +574,7 @@ class PerformanceBlueprint:
             self.equity          = (ptf['PRICE'] * ptf['QUANTITY']).sum()
             self.cost            = ptf['COST'].sum()
             self.realizedProfit  = self.df.loc[self.df.OPERATION == 'S', 'Profit'].sum()
-            self.div             = self.df[self.df.OPERATION == 'D']['AMOUNT'].sum()
+            self.div             = self.df[self.df.OPERATION.isin(['D1', 'A1', 'R1', 'JCP1', 'D', 'A', 'R', 'JCP'])]['AMOUNT'].sum()
             self.paperProfit     = self.equity -    self.cost
             self.profit          = self.equity -    self.cost +    self.realizedProfit +    self.div
             self.profitRate      = self.profit / self.cost
@@ -665,15 +715,15 @@ def color_negative_red(val):
 
 if __name__ == "__main__":
     tickers = ['ABEV3', 'BBDC3', 'BMEB4', 'CARD3', 'CIEL3', 'COGN3', 'ECOR3', 'EGIE3', 'EZTC3', 'FLRY3', 'GOLL4', 'GRND3', 'HGTX3', 'ITUB3', 'KLBN11', 'LCAM3', 'MDIA3', 'MOVI3', 'MRVE3', 'OIBR3', 'PARD3', 'PETR4', 'PRIO3', 'PSSA3', 'SBFG3', 'SMLS3', 'TASA4', 'TRIS3', 'VVAR3', 'WEGE3', 'XPBR31', 'BBFI11B', 'DEVA11', 'FAMB11B', 'FIGS11', 'GTWR11', 'HGRE11', 'HGRU11', 'HSLG11', 'HSML11', 'HTMX11', 'KNSC11', 'MFII11', 'MXRF11', 'RBRF11', 'RBRY11', 'RVBI11', 'SPTW11', 'VILG11', 'VISC11', 'VRTA11', 'XPCM11', 'XPLG11', 'XPML11']
-
+    tickers_us = ['CSCO', 'VZ', 'LUMN', 'EA', 'NEM', 'KWEB', 'PRIM', 'HOLI']
     # prcReader = PriceReader(tickers,[])
     # prcReader.load()
     # print(prcReader.df)
     # print(prcReader.brlIndex)
     # print(prcReader.getCurrentValue('CCJ', '2018-02-14'))
 
-    # YfinanceReader(tickers, None, None).load()
     DividendReader(tickers, None, None).load()
+    # YfinanceReader(tickers_us, None, None).load()
 
     
     # dr = SplitsReader(['ABEV3', 'BBDC3', 'BMEB4', 'CARD3', 'CIEL3', 'COGN3', 'ECOR3', 'EGIE3', 'EZTC3', 'FLRY3', 'GOLL4', 'GRND3', 'HGTX3', 'ITUB3', 'KLBN11', 'LCAM3', 'MDIA3', 'MOVI3', 'MRVE3', 'OIBR3', 'PARD3', 'PETR4', 'PRIO3', 'PSSA3', 'SBFG3', 'SMLS3', 'TASA4', 'TRIS3', 'VVAR3', 'WEGE3', 'XPBR31'], [], '2018-03-14 00:00:00')

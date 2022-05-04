@@ -1,7 +1,9 @@
 
+from operator import contains
 import sys
 
 import pandas as pd
+from scipy.misc import derivative
 pd.options.display.float_format = '${:,.2f}'.format
 import datetime as dt
 import numpy as np
@@ -14,21 +16,23 @@ from FinanceTools import *
 from OrdersReader import *
 from IRPF_Tools import *
 
-
-
 class Wallet():
     def __init__(self, work_dir):
         self.work_dir = work_dir
         if work_dir[-1] != '/':
             self.work_dir += '/'
-        self.td_config = namedtuple("td_config", "order_dir dataframe_path")
-        self.clear_config = namedtuple("clear_config", "order_dir dataframe_path")
+        self.td_config = namedtuple("config", "order_dir dataframe_path dividends_statement_path recomended_wallet")
+        self.clear_config = namedtuple("config", "order_dir dataframe_path dividends_statement_path recomended_wallet")
 
         self.td_config.order_dir = self.work_dir + 'Notas_TD'
+        self.td_config.dividends_statement_path = self.work_dir + 'Notas_TD'
         self.td_config.dataframe_path = self.work_dir + 'TD.csv'
+        self.td_config.recomended_wallet = self.td_config.order_dir + '/global_wallet.json'
         
         self.clear_config.order_dir = self.work_dir + 'Notas_Clear'
+        self.clear_config.dividends_statement_path = self.work_dir + 'Notas_Clear/Statements'
         self.clear_config.dataframe_path = self.work_dir + 'operations.csv'
+        self.clear_config.recomended_wallet = self.clear_config.order_dir + '/iv_wallet.json'
         try:
             os.mkdir('debug')
         except:
@@ -85,25 +89,38 @@ class Wallet():
 
         #Get the oldest order date
         self.startDate = self.df.iloc[0]['DATE']
-        self.df['AMOUNT'] = self.df['PRICE'] * self.df['QUANTITY'] 
+        self.df['AMOUNT'] = self.df['PRICE'] * self.df['QUANTITY']
+    
+    def load_statement(self):
+        if self.market == 'br':
+            st = Clear_DivStatement(self.clear_config.dividends_statement_path, self.clear_config.dividends_statement_path, 'divTable')
+            st.process()
+            self.divStatement = st.finish()
+        else:
+            self.divStatement = pd.DataFrame()
   
     def load_external_data(self):
         start_time = time.time()
+
+        div_start_date = self.startDate
+        if not self.divStatement.empty:
+            div_start_date = self.divStatement.iloc[-1]['DATE']
+
         self.prcReader = PriceReader(self.brTickers + self.fiiTickers, self.usTickers, self.startDate)
         self.splReader = SplitsReader(self.brTickers,self.usTickers, self.startDate)
         
         if self.market == 'br':
-            self.divReader = DividendReader(self.brTickers,self.fiiTickers, None, self.startDate)
+            self.divReader = DividendReader(self.brTickers,self.fiiTickers, None, div_start_date)
         else :
-            self.divReader = YfinanceReader(None, None,self.usTickers, self.startDate)
+            self.divReader = YfinanceReader(None, None,self.usTickers, div_start_date)
 
         def threadExecutor(obj):
             obj.load()
 
         threadList = []
         threadList.append(threading.Thread(target=threadExecutor, args=(self.prcReader,)))
-        threadList.append(threading.Thread(target=threadExecutor, args=(self.splReader,)))
         threadList.append(threading.Thread(target=threadExecutor, args=(self.divReader,)))
+        threadList.append(threading.Thread(target=threadExecutor, args=(self.splReader,)))
 
         for td in threadList:
             td.start()
@@ -114,26 +131,47 @@ class Wallet():
         print("Executed in %s seconds" % (time.time() - start_time))
         self.prcReader.df.to_csv('debug/log_pcr.tsv', sep='\t')
 
-    
+    def load_recomended_wallet(self):
+        import json
+        wallet_file = self.clear_config.recomended_wallet if self.market == "br" else self.td_config.recomended_wallet
+        self.recomended_wallet = None
+        with open(wallet_file) as file:
+            self.recomended_wallet = json.load(file)
+
+    def merge_statement_data(self):
+        if self.market == 'br':
+            self.df['PAYDATE'] = self.df['DATE']
+            def getType(symbol):
+                tmp = self.df[self.df.SYMBOL == symbol]
+                if tmp.empty:
+                    return symbol
+                return tmp.iloc[0]['TYPE']
+
+            divTable = self.divStatement
+            divTable['TYPE'] = divTable['SYMBOL'].map(lambda x: getType(x))
+            divTable['FEE'] = 0
+            divTable['Year'] = pd.DatetimeIndex(divTable['DATE']).year
+            divTable['Month'] = pd.DatetimeIndex(divTable['DATE']).month_name()
+            divTable['AMOUNT'] = 0
+            divTable = divTable.drop(columns='DESCRIPTION')
+
+            self.df = pd.concat([self.df, divTable])
+
     def merge_external_data(self):
         self.df['acum_qty'] = 0
         self.df['PM'] = 0
         self.df['CASH'] = 0
         self.df['PAYDATE'] = self.df['DATE']
+        today = dt.datetime.today().strftime('%Y-%m-%d')
 
         for paper in (self.brTickers + self.fiiTickers +self.usTickers):
             paperTable = self.df[self.df.SYMBOL == paper]
             fromDate = paperTable.iloc[0]['DATE']  
-            toDate = dt.datetime.today().strftime('%Y-%m-%d')
 
-            divTable = self.divReader.getPeriod(paper,fromDate, toDate).reset_index()  
-            #TODO: Date shall be used to calculate if 
-            # divTable['DATE'] = divTable['PAYDATE']
-            # divTable = divTable[['DATE', 'SYMBOL', 'PRICE']]
-            # print(divReader.self.df)
-
+            divTable = self.divReader.getPeriod(paper,fromDate, today).reset_index()  
+            if not self.divStatement.empty:
+                divTable = divTable[pd.to_datetime(divTable.PAYDATE) > self.divStatement.iloc[-1]['DATE']]
             divTable['QUANTITY'] = 1
-            # divTable['OPERATION'] = 'D'
             divTable['TYPE'] = paperTable.iloc[0]['TYPE']
             divTable['FEE'] = 0
             divTable['Year'] = pd.DatetimeIndex(divTable['DATE']).year
@@ -141,10 +179,9 @@ class Wallet():
             divTable['AMOUNT'] = 0
             divTable['acum_qty'] = 0
             divTable['CASH'] = 0
-            # self.df = self.df.append(divTable)
             self.df = pd.concat([self.df, divTable])
             
-            splitTable = self.splReader.getPeriod(paper,fromDate, toDate).reset_index()
+            splitTable = self.splReader.getPeriod(paper,fromDate, today).reset_index()
             splitTable['PRICE'] = 0
             splitTable['OPERATION'] = 'SPLIT'
             splitTable['TYPE'] = paperTable.iloc[0]['TYPE']
@@ -155,20 +192,20 @@ class Wallet():
             splitTable['acum_qty'] = 0
             splitTable['CASH'] = 0 
             splitTable['PAYDATE'] = splitTable['DATE']
-            # self.df = self.df.append(splitTable)
             self.df = pd.concat([self.df, splitTable])
 
     def compute_average_price(self):
-        self.df.sort_values(['DATE', 'OPERATION'], inplace=True)
-        self.df['PAYDATE'] = pd.to_datetime(self.df['PAYDATE'] , format='%Y-%m-%d')
+        operation_order_map = {'C': 0, 'W': 0, 'SPLIT': 0, 'B': 1, 'S': 2, 'D': 3, 'D1': 3, 'D2': 3,'JCP': 3,'JCP1': 3, 'R': 3, 'R1': 3, 'T': 4, 'T1': 4, 'A': 5, 'A1': 5, 'I': 6, 'I1': 6}
+        self.df['OPERATION_ORDER'] = self.df['OPERATION'].map(lambda x: operation_order_map[x])
+        self.df.sort_values(['DATE', 'OPERATION_ORDER'], inplace=True)
+        self.df = self.df.drop('OPERATION_ORDER', axis=1)
 
         #Calc the average price and rename the columns names
-        self.df=self.df.groupby(['SYMBOL']).apply(TableAccumulator(self.prcReader).ByGroup).reset_index(drop=True).dropna()
+        self.df=self.df.groupby(['SYMBOL']).apply(TableAccumulator(self.prcReader).ByGroup).reset_index(drop=True)
         self.df = self.df.sort_values(['PAYDATE', 'OPERATION'], ascending=[True, False])
-        self.df=self.df.apply(TableAccumulator(self.prcReader).Cash, axis=1)
-        # self.df=self.df.sort_values(['DATE', 'OPERATION']).reset_index(drop=True)
+        self.df=self.df.apply(TableAccumulator(self.prcReader).Cash, axis=1).reset_index(drop=True)
 
-        self.df.to_csv('debug/df_log.tsv', sep='\t')
+        self.df.to_csv(f'debug/df_log_{self.market}.tsv', sep='\t')
         # self.df[self.df.SYMBOL.str.contains('PRIO')]
   
     def compute_realized_profit(self):
@@ -178,7 +215,6 @@ class Wallet():
         self.df = tmp.groupby(['SYMBOL', 'DATE']).apply(profit.Trade).reset_index(drop=True)
 
         rl = self.df[self.df.OPERATION == 'S'][['DATE', 'SYMBOL', 'TYPE', 'Profit', 'DayTrade', 'Month', 'Year']]
-        rl['DATE'] = rl['DATE'].apply(lambda x: x.strftime('%Y-%m-%d'))
         rl1 = rl[['DATE', 'SYMBOL', 'TYPE', 'Profit', 'DayTrade']]
         rl1.loc['Total', 'Profit'] = rl['Profit'].sum()
         rl1 = rl1.fillna(' ').reset_index(drop=True)
@@ -204,7 +240,7 @@ class Wallet():
             self.realized_profit_pivot_fii = Pivot(rl[rl['TYPE'] == 'FII'])
 
     def compute_portifolio(self):
-        self.portifolio_df = Portifolio(self.prcReader,self.df).show()
+        self.portifolio_df = Portifolio(self.prcReader, self.df, self.recomended_wallet).show()
 
     def compute_blueprint(self):
         p = PerformanceBlueprint(self.prcReader, self.df, dt.datetime.today().strftime('%Y-%m-%d'))
@@ -232,34 +268,46 @@ class Wallet():
         m = int(dt.datetime.today().strftime("%m"))
         y = int(dt.datetime.today().strftime("%Y"))
 
-        divTable = self.divReader.df
-        prov = self.df[self.df['OPERATION'] == 'D1']
-        if prov.empty:
-            prov = self.df[self.df['OPERATION'] == 'D']
 
-        if not divTable.empty or not prov.empty:
+        divTable = self.divReader.df
+        prov = self.df[self.df['OPERATION'].isin('D1 R1 JCP1 A1'.split())]
+        if prov.empty:
+            prov = self.df[self.df['OPERATION'].isin('D R JCP A'.split())]
+
+        try:
+            if divTable.empty or prov.empty:
+                raise
+
             divTable = divTable.reset_index()
             divTable['PAYDATE'] = pd.to_datetime(divTable['PAYDATE'])
             divTable = divTable[(divTable['PAYDATE'].dt.month == m) & (divTable['PAYDATE'].dt.year == y)]
+            if divTable.empty:
+                raise
 
             divTable= pd.merge(divTable, prov, how='inner', on=['PAYDATE', 'DATE', 'SYMBOL', 'PRICE'])
+            if divTable.empty:
+                raise
+
             divTable = divTable[['PAYDATE', 'SYMBOL','AMOUNT']]
             divTable.columns = ['DATE', 'PAYDATE', 'R$']
-            # divTable = divTable.groupby(['Ativo', 'DATE'])['R$'].sum().reset_index()
+            divTable = divTable.groupby(['SYMBOL', 'DATE'])['R$'].sum().reset_index()
             # display(divTable)
             divTable.sort_values('DATE', inplace=True)
             divTable['DATE'] = divTable['DATE'].apply(lambda x: x.strftime('%Y-%m-%d'))
             divTable.loc['Total', 'R$'] = divTable['R$'].sum()
             self.div_table = divTable.fillna(' ').reset_index(drop=True)
-        
+        except:
+            self.div_table = pd.DataFrame()
+
         if not divTable.empty or not prov.empty:
             pvt = prov.pivot_table(index='Year', columns='Month', values='AMOUNT', margins=True, margins_name='Total', aggfunc='sum', fill_value=0)
             sorted_m = sorted(pvt.columns[:-1], key=lambda month: dt.datetime.strptime(month, "%B"))
             sorted_m.append(pvt.columns[-1])
             self.pvt_div_table = pvt.reindex(sorted_m, axis=1)
+        else:
+            self.pvt_div_table = pd.DataFrame()
 
     def compute_history_blueprint(self, period='all'):
-
         startPlot = self.startDate
         frequency = 'SM'
 
@@ -330,8 +378,11 @@ class Wallet():
     def run(self, market='br'):
         self.market = market
         self.open_dataframe()
-
+        self.load_statement()
         self.load_external_data()
+        self.load_recomended_wallet()
+
+        self.merge_statement_data()
         self.merge_external_data()
         self.compute_average_price()
         self.compute_realized_profit()
@@ -381,7 +432,11 @@ if __name__ == "__main__":
     root += 'Investing/'
     wallet = Wallet(root, )
     wallet.run(market='br')
-    wallet.export_to_excel(root + 'out.xlsx')
-    wallet.generate_charts()
-    wallet.history_chart.savefig(root + 'chart.png')
+
+    wallet_us = Wallet(root, )
+    wallet_us.run(market='us')
+
+    # wallet.export_to_excel(root + 'out.xlsx')
+    # wallet.generate_charts()
+    # wallet.history_chart.savefig(root + 'chart.png')
     print('Finished')
