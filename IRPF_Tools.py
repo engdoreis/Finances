@@ -12,9 +12,16 @@ http_header = {
         "X-Requested-With": "XMLHttpRequest"
     }
 
+class ProcessedOrders():
+    def __init__(self, file):
+        self.dFrame = pd.read_csv(file, sep='\t')
+        self.dFrame['DATE'] = pd.to_datetime(self.dFrame['DATE'], format='%Y/%m/%d')
+
+    def import_df(self):
+        return self.dFrame
 class Taxation:
-    def __init__(self, dataframe, stockTaxFreeMonth=20000, stockTaxRate=0.2, fiiTaxRate=0.2, daytradeTaxRate=0.2):
-        self.df = dataframe
+    def __init__(self, file, stockTaxFreeMonth=20000, stockTaxRate=0.2, fiiTaxRate=0.2, daytradeTaxRate=0.2):
+        self.df = ProcessedOrders(file).import_df()
         self.stockTaxRate=stockTaxRate
         self.fiiTaxRate=fiiTaxRate
         self.daytradeTaxRate=daytradeTaxRate
@@ -103,9 +110,8 @@ class Taxation:
 #-------------------------------------------------------------------------------------------------
 class IRPF_BensDireitos:
     def __init__(self, file, cache='debug/CNPJ_caching.tsv'):
-        dFrame = pd.read_csv(file, sep='\t')
+        dFrame = ProcessedOrders(file).import_df()
         dFrame = dFrame[dFrame['OPERATION'].isin(['B', 'S', 'SPLIT', 'C'])]
-        dFrame['DATE'] = pd.to_datetime(dFrame['DATE'], format='%Y/%m/%d')
 
         self.dtframe = pd.DataFrame()
         for year in dFrame['DATE'].dt.year.unique():
