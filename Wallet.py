@@ -204,15 +204,13 @@ class Wallet():
         self.df=self.df.groupby(['SYMBOL']).apply(TableAccumulator(self.prcReader).ByGroup).reset_index(drop=True)
         self.df = self.df.sort_values(['PAYDATE', 'OPERATION'], ascending=[True, False])
         self.df=self.df.apply(TableAccumulator(self.prcReader).Cash, axis=1).reset_index(drop=True)
-
-        self.df.to_csv(f'debug/df_log_{self.market}.tsv', sep='\t')
-        # self.df[self.df.SYMBOL.str.contains('PRIO')]
   
     def compute_realized_profit(self):
         profit = Profit()
         tmp = self.df.sort_values(by=['DATE', 'OPERATION'], ascending=[True, True])
         tmp.reset_index(drop=True)
         self.df = tmp.groupby(['SYMBOL', 'DATE']).apply(profit.Trade).reset_index(drop=True)
+        self.df.to_csv(f'debug/df_log_{self.market}.tsv', sep='\t')
 
         rl = self.df[self.df.OPERATION == 'S'][['DATE', 'SYMBOL', 'TYPE', 'Profit', 'DayTrade', 'Month', 'Year']]
         rl1 = rl[['DATE', 'SYMBOL', 'TYPE', 'Profit', 'DayTrade']]
@@ -436,7 +434,7 @@ if __name__ == "__main__":
     wallet_us = Wallet(root, )
     wallet_us.run(market='us')
 
-    # wallet.export_to_excel(root + 'out.xlsx')
-    # wallet.generate_charts()
-    # wallet.history_chart.savefig(root + 'chart.png')
+    wallet.export_to_excel(root + 'out.xlsx')
+    wallet.generate_charts()
+    wallet.history_chart.savefig(root + 'chart.png')
     print('Finished')
