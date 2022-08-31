@@ -212,11 +212,13 @@ class Wallet():
         self.df = tmp.groupby(['SYMBOL', 'DATE']).apply(profit.Trade).reset_index(drop=True)
         self.df.to_csv(f'debug/df_log_{self.market}.tsv', sep='\t')
 
-        rl = self.df[self.df.OPERATION == 'S'][['DATE', 'SYMBOL', 'TYPE', 'Profit', 'DayTrade', 'Month', 'Year']]
-        rl1 = rl[['DATE', 'SYMBOL', 'TYPE', 'Profit', 'DayTrade']]
+        rl = self.df[self.df.OPERATION == 'S'][['DATE', 'SYMBOL', 'TYPE', 'AMOUNT', 'Profit', 'DayTrade', 'Month', 'Year']]
+        rl1 = rl[['DATE', 'SYMBOL', 'TYPE', 'AMOUNT', 'Profit', 'DayTrade']]
         rl1.loc['Total', 'Profit'] = rl['Profit'].sum()
+        rl1['AMOUNT'] = rl1['AMOUNT'].abs()
+        rl1.loc['Total', 'AMOUNT'] = 0
         rl1 = rl1.fillna(' ').reset_index(drop=True)
-        self.realized_profit_df = rl1.style.applymap(color_negative_red, subset=['Profit']).format( {'Profit': '$ {:,.2f}', 'DayTrade': '{}'})
+        self.realized_profit_df = rl1.style.applymap(color_negative_red, subset=['Profit', 'AMOUNT']).format({'AMOUNT': '$ {:,.2f}', 'Profit': '$ {:,.2f}', 'DayTrade': '{}'})
 
         rl1 = rl.groupby('SYMBOL').Profit.sum().reset_index()
         rl1.loc['Total', 'Profit'] = rl1['Profit'].sum()

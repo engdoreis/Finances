@@ -22,13 +22,14 @@ class ProcessedOrders():
 class Taxation:
     def __init__(self, file, stockTaxFreeMonth=20000, stockTaxRate=0.2, fiiTaxRate=0.2, daytradeTaxRate=0.2):
         self.df = ProcessedOrders(file).import_df()
+        # self.df = self.df[self.df['OPERATION'].isin(['S'])]
         self.stockTaxRate=stockTaxRate
         self.fiiTaxRate=fiiTaxRate
         self.daytradeTaxRate=daytradeTaxRate
         self.stockTaxFreeMonth=stockTaxFreeMonth
         
     def calcStockTaxes(self, dataframe):
-        tax = np.where(dataframe['Profit'] > self.stockTaxFreeMonth , dataframe['Profit'] * self.stockTaxRate, 0)
+        tax = np.where(dataframe['AMOUNT'] > self.stockTaxFreeMonth , dataframe['Profit'] * self.stockTaxRate, 0)
         dataframe['Tax'] = np.where(tax > 0 , tax, 0)
 
     def calcFiiTaxes(self, dataframe):
@@ -42,7 +43,7 @@ class Taxation:
     def DayTrade(self, stockType):
         #Filter by stockType and get the year list
         dayTrade = self.df[(self.df['DayTrade'] == 1) & (self.df['TYPE'] == stockType)]
-        dayTrade = dayTrade.groupby(['SYMBOL', 'DATE'])['Profit'].sum().reset_index()
+        dayTrade = dayTrade.groupby(['SYMBOL', 'DATE']).agg({'AMOUNT':'sum', 'Profit':'sum'}).reset_index()
         dayTrade['Year'] = pd.DatetimeIndex(dayTrade['DATE']).year
         dayTrade['Month'] = pd.DatetimeIndex(dayTrade['DATE']).month_name()
         dayTrade=dayTrade[['Month','Profit','Year']]
@@ -51,11 +52,12 @@ class Taxation:
     def SwingTrade(self, stockType):
         swingTrade = pd.DataFrame(columns=['Month','Profit'])
         #Filter by stockType and get the year list
-        typeDF = self.df[(self.df['DayTrade'] == 0) & (self.df['TYPE'] == stockType)]
+        typeDF = self.df[(self.df['DayTrade'] == 0) & (self.df['TYPE'] == stockType) & (self.df['OPERATION'].isin(['S']))]
+        typeDF['AMOUNT'] *= -1 
         years = typeDF.Year.unique()
         for year in years: 
             #Calculate the Profit/Loss by month in the current year
-            res=typeDF[typeDF.Year == year].groupby(['Month'])['Profit'].sum().reset_index()
+            res=typeDF[typeDF.Year == year].groupby(['Month']).agg({'AMOUNT':'sum', 'Profit':'sum'}).reset_index()
             #Sort the table by the month name
             res['Year']=year
             res['m'] = pd.to_datetime(res.Month, format='%B').dt.month
@@ -233,8 +235,14 @@ class IRPF_BensDireitos:
         return cnpj[0].isdigit()
 #     -------------------------------------------------------------------------------------------------
 
-if __name__ == "__main__":
+def irpf_test():
     irpf = IRPF_BensDireitos('debug/df_log.tsv')
     irpf.load()
     print(irpf.get_last_year())
 
+def TaxationTest():
+    tx = Taxation('debug/df_log_br.tsv')
+    tx.Process('Ação')
+
+if __name__ == "__main__":
+    TaxationTest()
