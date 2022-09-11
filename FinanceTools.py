@@ -427,7 +427,7 @@ class TableAccumulator:
 
     def Cash(self, row):
         stType = row.loc['OPERATION']
-        amount = round(row.loc['AMOUNT'], 2)
+        amount = round(row.loc['AMOUNT'], 6)
 
         if (stType in ['C', 'W']):
             self.cash += amount + row.loc['FEE']
@@ -435,15 +435,14 @@ class TableAccumulator:
             row.loc['PM'] = row.loc['PRICE']
             row['PM_BRL'] = row.loc['PRICE'] / self.get_currency_rate(row['DATE'])
 
-
         elif (stType in ['B', 'S']):
             self.cash -= (amount + row.loc['FEE'])
         
-        elif ((stType in ['D1', 'A1', 'R1', 'JCP1', 'T1', 'I1']) or (stType in ['D', 'A', 'R', 'JCP', 'T'] and row['acum_qty'] > 0)):
+        elif ((stType in ['D1', 'A1', 'R1', 'JCP1', 'T1', 'I1', 'CF']) or (stType in ['D', 'A', 'R', 'JCP', 'T'] and row['acum_qty'] > 0)):
             # self.acumProv += amount 
             self.cash += amount
 
-        row['CASH'] = round(self.cash, 2)
+        row['CASH'] = round(self.cash, 6)
         return row
 #     -------------------------------------------------------------------------------------------------
 
@@ -574,7 +573,7 @@ class PerformanceBlueprint:
             self.equity          = (ptf['PRICE'] * ptf['QUANTITY']).sum()
             self.cost            = ptf['COST'].sum()
             self.realizedProfit  = self.df.loc[self.df.OPERATION == 'S', 'Profit'].sum()
-            self.div             = self.df[self.df.OPERATION.isin(['D1', 'A1', 'R1', 'JCP1', 'D', 'A', 'R', 'JCP'])]['AMOUNT'].sum()
+            self.div             = self.df[self.df.OPERATION.isin(['D1', 'A1', 'R1', 'JCP1', 'D', 'A', 'R', 'JCP', 'CF'])]['AMOUNT'].sum()
             self.paperProfit     = self.equity -    self.cost
             self.profit          = self.equity -    self.cost +    self.realizedProfit +    self.div
             self.profitRate      = self.profit / self.cost

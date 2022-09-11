@@ -5,6 +5,11 @@ import numpy as np
 from collections import namedtuple
 import pandas as pd
 from glob import glob
+import logging
+
+logging.basicConfig(format='[%(filename)s:%(lineno)d] %(message)s', level=logging.ERROR)
+
+logger = logging.getLogger(__name__)
 
 def to_float(str, decimal=',', thousand='.'):
     return float(str.replace(thousand,'').replace(decimal,'.'))
@@ -185,53 +190,75 @@ class Clear_DivStatement():
         self.inputDir = inputDir
         self.output = outDir + '/' + name + '.tsv'
         self.dtFrame = pd.DataFrame()
-        self.operation_map = {'PAGAMENTO DE AMORTIZAÇÃO': 'A1', 'JUROS-S/CAPITAL':'JCP1', 'DIVIDENDOS': 'D1', 'RENDIMENTO': 'R1', 'ACORDO COMERCIAL': 'I1', 'IRRF S/DAY TRADE': 'T1'}
+        self.operation_map = {'PAGAMENTO DE AMORTIZACAO': 'A1', 'JUROS S/CAPITAL':'JCP1',
+                              'DIVIDENDOS': 'D1', 'RENDIMENTO': 'R1', 'ACORDO COMERCIAL': 'I1',
+                              'IRRF S/DAY TRADE': 'T1', 'IRRF S/ OPERACOES': 'T1', 'IRRF VENDA RENDA FIXA': 'T1', 'CREDITO FRACOES' : 'CF',
+                              'RESGATE DE RENDA VARIAVEL' : 'RRV', 'RECEBIMENTO':'C', 'RETIRADA':'W', 'VENDA RENDA FIXA':'C', 'COMPRA RENDA FIXA':'W'
+                              }
+                              
+        self.symbol_map = {'IRRF S/DAY TRADE': 'TAX', 'IRRF S/ OPERACOES': 'TAX', 'IRRF VENDA RENDA FIXA': 'TAX'}
         
     def concat_files(self):
         files = sorted(glob(self.inputDir + '/*.csv'))
         for file in files:
-            tmp =  pd.read_csv(file, sep=';', decimal=',', thousands='.')            
+            tmp =  pd.read_csv(file, sep=';', decimal=',', thousands='.')
             self.dtFrame = pd.concat([self.dtFrame, tmp.iloc[::-1]])
         self.dtFrame.columns = 'DATE PAYDATE PRICE DESCRIPTION CASH'.split()
         self.dtFrame['DATE'] = pd.to_datetime(self.dtFrame['DATE'], format='%d/%m/%Y')
         self.dtFrame['PAYDATE'] = pd.to_datetime(self.dtFrame['PAYDATE'], format='%d/%m/%Y')
-        self.dtFrame.to_csv(self.output + '.tmp', index=False, sep='\t')
-
+        self.dtFrame.to_csv(self.inputDir + '/extrato.tsv', index=False, sep='\t')
 
     def description_parser(self, value):
+        error = False
         op = qty = symbol = np.nan
-        spl_val = value.replace('JUROS S/CAPITAL', 'JUROS-S/CAPITAL').split()
+        replace_dic = {'Ç': 'C', 'Õ' : 'O', 'Ã' : 'A', 'Á' : 'A', 'É': 'E'}
+        value = value.strip().upper()
+        for src, dest in replace_dic.items():
+            value = value.replace(src, dest)
+
         try:
-            if bool(set(spl_val) & set(self.operation_map.keys())):
-                op = self.operation_map[spl_val[0]]
-                qty = int(spl_val[1].replace('.',''))
-                symbol = spl_val[-1]
-                raise
-            if 'PAGAMENTO DE AMORTIZAÇÃO' in value:
-                op = self.operation_map['PAGAMENTO DE AMORTIZAÇÃO']
-                symbol = spl_val[-1]
-                symbol = np.nan if symbol == 'AMORTIZAÇÃO' else symbol
-                raise
-            if 'ACORDO COMERCIAL' in value:
-                op = self.operation_map['ACORDO COMERCIAL']
-                qty = 1
-                symbol = 'CASH'
-                raise
-            if 'IRRF S/DAY TRADE' in value:
-                op = self.operation_map['IRRF S/DAY TRADE']
-                qty = 1
-                symbol = 'TAX'
-                raise
-            if 'NOTA' in value:
-                raise
-            if 'TED' in value:
-                raise
-            print(value)
-        except:
-            pass
+            while True:
+                res = re.compile(r'NOTA.+(CORRETAGEM|PREGAO).*').search(value)
+                if res:
+                    break
+                
+                res = re.compile(r'(RENDIMENTOS?|DIVIDENDOS?|JUROS S\/CAPITAL)\s+([0-9,.]+)\s+(?:PAPEL)?\s(\w+)').search(value)
+                if res:
+                    op = self.operation_map[res.group(1)]
+                    qty = int(res.group(2).replace('.','').replace(',',''))
+                    symbol = res.group(3)
+                    break
+                
+                res = re.compile(r'^(?:TED.*)?(VENDA RENDA FIXA|COMPRA RENDA FIXA|RECEBIMENTO|RETIRADA|IRRF S\/DAY TRADE|IRRF S\/ OPERACOES|IRRF VENDA RENDA FIXA|ACORDO COMERCIAL).*').search(value)
+                if res:
+                    op = self.operation_map[res.group(1)]
+                    symbol = self.symbol_map.get(res.group(1), 'CASH')
+                    qty = 1
+                    break
+                
+                res = re.compile(r'(PAGAMENTO DE AMORTIZACAO)\s*(\w+)?').search(value)
+                if res:
+                    op = self.operation_map[res.group(1)]
+                    if res.group(2):
+                        symbol = res.group(2)
+                    # print(f'value: {value}\t|\tmatch: {res.groups()}\t|\treturn: op={op}, symbol={symbol}, qty={qty}\n')
+                    break
+
+                res = re.compile(r'(?:PAGA\w+ DE\s+)?(RESGATE DE RENDA VARIAVEL|CREDITO FRACOES)\s+(\w+)').search(value)
+                if res:
+                    op = self.operation_map[res.group(1)]
+                    symbol = res.group(2)
+                    qty = 1
+                    break
+
+                logger.debug(f'No match for: {value}')
+                break
+        except Exception as e:
+            logger.error(f'Exception: {e}\tWhen parsing line: {value}\n')
+            exit()
 
         return op, qty, symbol
-        
+
     def process(self):
         self.concat_files()
         self.dtFrame['OPERATION'], self.dtFrame['QUANTITY'], self.dtFrame['SYMBOL'] = zip(*self.dtFrame['DESCRIPTION'].map(self.description_parser))
@@ -247,6 +274,7 @@ class Clear_DivStatement():
         self.dtFrame = self.dtFrame['SYMBOL DATE PRICE PAYDATE OPERATION QUANTITY DESCRIPTION'.split()]
         self.dtFrame['DATE'] = pd.to_datetime(self.dtFrame['DATE'], format='%Y-%m-%d')
         self.dtFrame['PAYDATE'] = pd.to_datetime(self.dtFrame['PAYDATE'], format='%Y-%m-%d')
+        # exit()
 
     def finish(self):
         self.dtFrame.to_csv(self.output, index=False, sep='\t')

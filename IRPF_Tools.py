@@ -33,11 +33,11 @@ class Taxation:
         dataframe['Tax'] = np.where(tax > 0 , tax, 0)
 
     def calcFiiTaxes(self, dataframe):
-        tax = dataframe['Dutiable'] * self.fiiTaxRate
+        tax = dataframe['Taxable'] * self.fiiTaxRate
         dataframe['Tax'] = np.where(tax > 0 , tax, 0)
 
     def calcDaytradeTaxes(self, dataframe):
-        tax = dataframe['Dutiable'] * self.daytradeTaxRate
+        tax = dataframe['Taxable'] * self.daytradeTaxRate
         dataframe['Tax'] = np.where(tax > 0 , tax, 0)
 
     def DayTrade(self, stockType):
@@ -53,7 +53,7 @@ class Taxation:
         swingTrade = pd.DataFrame(columns=['Month','Profit'])
         #Filter by stockType and get the year list
         typeDF = self.df[(self.df['DayTrade'] == 0) & (self.df['TYPE'] == stockType) & (self.df['OPERATION'].isin(['S']))]
-        typeDF['AMOUNT'] *= -1 
+        typeDF['AMOUNT'] = typeDF['AMOUNT'].abs() 
         years = typeDF.Year.unique()
         for year in years: 
             #Calculate the Profit/Loss by month in the current year
@@ -95,8 +95,8 @@ class Taxation:
         acumLoss.set_index('Index', inplace=True)
         newDF=pd.concat([newDF, acumLoss['AcumLoss']], axis=1)
 
-        dutiable = newDF['Profit'] + newDF['AcumLoss'].shift(1, fill_value=0)
-        newDF['Dutiable'] = np.where(dutiable > 0, dutiable, 0)
+        taxable = newDF['Profit'] + newDF['AcumLoss'].shift(1, fill_value=0)
+        newDF['Taxable'] = np.where(taxable > 0, taxable, 0)
         if (isDaytrade):
             self.calcDaytradeTaxes(newDF)
         elif (stockType == 'FII'):

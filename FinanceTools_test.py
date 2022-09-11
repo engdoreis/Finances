@@ -20,7 +20,7 @@ class Test_Taxation:
     def sanitize_type(self, df):
         dict_columns_type = {'Profit': float,
             'AcumLoss': float,
-            'Dutiable': float,
+            'Taxable': float,
             'Tax': float,
             }
         return df.astype(dict_columns_type)
