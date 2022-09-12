@@ -113,7 +113,7 @@ def ReadOrders(indir='d:/Investing/Notas_Clear', outfile='d:/Investing/operation
         
         # existentDF.append(diff).to_csv(outfile, index=False)
         new = pd.concat([existentDF, diff])
-        new['Qty'] = new['Qty'].astype(float).round(1)
+        new['Qty'] = new['Qty'].astype(float).round(6)
         new.to_csv(outfile, index=False)
         os.remove(tempFile)
     except:

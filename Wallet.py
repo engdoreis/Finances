@@ -152,7 +152,7 @@ class Wallet():
             divTable['FEE'] = 0
             divTable['Year'] = pd.DatetimeIndex(divTable['DATE']).year
             divTable['Month'] = pd.DatetimeIndex(divTable['DATE']).month_name()
-            divTable['AMOUNT'] = 0
+            divTable['AMOUNT'] = divTable['PRICE'] * divTable['QUANTITY']
             divTable = divTable.drop(columns='DESCRIPTION')
 
             self.df = pd.concat([self.df, divTable])
@@ -195,7 +195,10 @@ class Wallet():
             self.df = pd.concat([self.df, splitTable])
 
     def compute_average_price(self):
-        operation_order_map = {'C': 0, 'W': 0, 'SPLIT': 0, 'B': 1, 'S': 2, 'D': 3, 'D1': 3, 'D2': 3,'JCP': 3,'JCP1': 3, 'R': 3, 'R1': 3, 'T': 4, 'T1': 4, 'A': 5, 'A1': 5, 'I': 6, 'I1': 6}
+        operation_order_map = {'C': 0, 'W': 0, 'SPLIT': 0, 'B': 1, 'S': 2, 'D': 3, 'D1': 3,
+                               'D2': 3,'JCP': 3,'JCP1': 3, 'R': 3, 'R1': 3, 'T': 4, 'T1': 4,
+                               'A': 5, 'A1': 5, 'I': 6, 'I1': 6, 'CF': 6, 'RRV': 6}
+
         self.df['OPERATION_ORDER'] = self.df['OPERATION'].map(lambda x: operation_order_map[x])
         self.df.sort_values(['DATE', 'OPERATION_ORDER'], inplace=True)
         self.df = self.df.drop('OPERATION_ORDER', axis=1)
@@ -210,13 +213,15 @@ class Wallet():
         tmp = self.df.sort_values(by=['DATE', 'OPERATION'], ascending=[True, True])
         tmp.reset_index(drop=True)
         self.df = tmp.groupby(['SYMBOL', 'DATE']).apply(profit.Trade).reset_index(drop=True)
-        self.df.to_csv(f'debug/df_log_{self.market}.tsv', sep='\t')
+        self.df.sort_values(['PAYDATE', 'OPERATION'], ascending=[True, False]).to_csv(f'debug/df_log_{self.market}.tsv', sep='\t')
 
-        rl = self.df[self.df.OPERATION == 'S'][['DATE', 'SYMBOL', 'TYPE', 'Profit', 'DayTrade', 'Month', 'Year']]
-        rl1 = rl[['DATE', 'SYMBOL', 'TYPE', 'Profit', 'DayTrade']]
+        rl = self.df[self.df.OPERATION == 'S'][['DATE', 'SYMBOL', 'TYPE', 'AMOUNT', 'Profit', 'DayTrade', 'Month', 'Year']]
+        rl1 = rl[['DATE', 'SYMBOL', 'TYPE', 'AMOUNT', 'Profit', 'DayTrade']]
         rl1.loc['Total', 'Profit'] = rl['Profit'].sum()
+        rl1['AMOUNT'] = rl1['AMOUNT'].abs()
+        rl1.loc['Total', 'AMOUNT'] = 0
         rl1 = rl1.fillna(' ').reset_index(drop=True)
-        self.realized_profit_df = rl1.style.applymap(color_negative_red, subset=['Profit']).format( {'Profit': '$ {:,.2f}', 'DayTrade': '{}'})
+        self.realized_profit_df = rl1.style.applymap(color_negative_red, subset=['Profit', 'AMOUNT']).format({'AMOUNT': '$ {:,.2f}', 'Profit': '$ {:,.2f}', 'DayTrade': '{}'})
 
         rl1 = rl.groupby('SYMBOL').Profit.sum().reset_index()
         rl1.loc['Total', 'Profit'] = rl1['Profit'].sum()
@@ -436,5 +441,5 @@ if __name__ == "__main__":
 
     wallet.export_to_excel(root + 'out.xlsx')
     wallet.generate_charts()
-    wallet.history_chart.savefig(root + 'chart.png')
+    # wallet.history_chart.savefig(root + 'chart.png')
     print('Finished')
