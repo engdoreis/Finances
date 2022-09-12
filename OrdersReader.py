@@ -103,8 +103,9 @@ def ReadOrders(indir='d:/Investing/Notas_Clear', outfile='d:/Investing/operation
     oOrg.dtFrame[['Paper', 'Date', 'Value', 'Qty', 'Type', 'Category', 'Fee', 'Company']].to_csv(tempFile, index=False)
 
     try:
-        existentDF = pd.read_csv(outfile)
-        outDF = pd.read_csv(tempFile)
+        dtypes =  {'Qty': float, 'Value': float}
+        existentDF = pd.read_csv(outfile, dtype = dtypes)
+        outDF = pd.read_csv(tempFile, dtype = dtypes)
         existentDF=existentDF[existentDF['Date'].astype(bool)].dropna()
 
         diff = outDF.merge(existentDF, how='outer', on=['Date', 'Value', 'Qty', 'Fee', 'Company'], suffixes=['','_'], indicator=True)
