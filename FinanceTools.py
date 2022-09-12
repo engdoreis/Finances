@@ -240,6 +240,7 @@ class DividendReader:
             self.df = self.cache.merge(self.df, sortby=['DATE', 'SYMBOL'], on=['SYMBOL', 'DATE', 'OPERATION'])
         else:      
             self.df = self.cache.load_data()
+            self.df['PAYDATE'] = pd.to_datetime(self.df['PAYDATE'], format='%Y/%m/%d')
 
         if not self.df.empty:
             self.df.set_index('DATE', inplace = True)

@@ -216,7 +216,7 @@ class Wallet():
         self.df.sort_values(['PAYDATE', 'OPERATION'], ascending=[True, False]).to_csv(f'debug/df_log_{self.market}.tsv', sep='\t')
 
         rl = self.df[self.df.OPERATION == 'S'][['DATE', 'SYMBOL', 'TYPE', 'AMOUNT', 'Profit', 'DayTrade', 'Month', 'Year']]
-        rl1 = rl[['DATE', 'SYMBOL', 'TYPE', 'AMOUNT', 'Profit', 'DayTrade']]
+        rl1 = rl[['DATE', 'SYMBOL', 'TYPE', 'AMOUNT', 'Profit', 'DayTrade']].copy(deep=True)
         rl1.loc['Total', 'Profit'] = rl['Profit'].sum()
         rl1['AMOUNT'] = rl1['AMOUNT'].abs()
         rl1.loc['Total', 'AMOUNT'] = 0
