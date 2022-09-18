@@ -270,45 +270,44 @@ class Wallet():
              .to_excel(self.work_dir + 'tx_dtacao.xlsx')
 
     def compute_dividends(self):
-        m = int(dt.datetime.today().strftime("%m"))
-        y = int(dt.datetime.today().strftime("%Y"))
+        self.prov_month = pd.DataFrame()
+        for n in range(1, -1, -1):
+            date = dt.datetime.today() - pd.DateOffset(months=n)
+
+            m = int(date.strftime("%m"))
+            y = int(date.strftime("%Y"))
+            prov_df = self.df[(self.df['PAYDATE'].dt.month == m) & (self.df['PAYDATE'].dt.year == y)]
+            if prov_df.empty:
+                continue
+
+            prov_month = prov_df[prov_df['OPERATION'].isin('D R JCP A'.split())].copy(deep=True)
+            if prov_month.empty:
+                prov_month = prov_df[prov_df['OPERATION'].isin('D1 R1 JCP1 A1'.split())].copy(deep=True)
+
+            if prov_month.empty:
+                continue
+
+            m_name = date.strftime("%B")
+            prov_month = prov_month[['PAYDATE', 'SYMBOL','AMOUNT']]
+            prov_month.columns = ['DATE', 'SYMBOL', self.currency]
+            prov_month = prov_month.groupby(['SYMBOL', 'DATE'])[self.currency].sum().reset_index()
+            prov_month.sort_values('DATE', inplace=True)
+            prov_month['DATE'] = prov_month['DATE'].apply(lambda x: x.strftime('%Y-%m-%d'))
+            prov_month.loc['Total', self.currency] = prov_month[self.currency].sum()
+            prov_month['MONTH'] = date.strftime("%B")
+            self.prov_month = pd.concat([self.prov_month, prov_month.fillna(' ').reset_index(drop=True)])
+        self.prov_month.set_index(['MONTH', 'SYMBOL'], inplace=True)
 
 
-        divTable = self.divReader.df
         prov = self.df[self.df['OPERATION'].isin('D1 R1 JCP1 A1'.split())]
         if prov.empty:
             prov = self.df[self.df['OPERATION'].isin('D R JCP A'.split())]
 
-        try:
-            if divTable.empty or prov.empty:
-                raise
-
-            divTable = divTable.reset_index()
-            divTable['PAYDATE'] = pd.to_datetime(divTable['PAYDATE'])
-            divTable = divTable[(divTable['PAYDATE'].dt.month == m) & (divTable['PAYDATE'].dt.year == y)]
-            if divTable.empty:
-                raise
-
-            divTable= pd.merge(divTable, prov, how='inner', on=['PAYDATE', 'DATE', 'SYMBOL', 'PRICE'])
-            if divTable.empty:
-                raise
-
-            divTable = divTable[['PAYDATE', 'SYMBOL','AMOUNT']]
-            divTable.columns = ['DATE', 'PAYDATE', 'R$']
-            divTable = divTable.groupby(['SYMBOL', 'DATE'])['R$'].sum().reset_index()
-            # display(divTable)
-            divTable.sort_values('DATE', inplace=True)
-            divTable['DATE'] = divTable['DATE'].apply(lambda x: x.strftime('%Y-%m-%d'))
-            divTable.loc['Total', 'R$'] = divTable['R$'].sum()
-            self.div_table = divTable.fillna(' ').reset_index(drop=True)
-        except:
-            self.div_table = pd.DataFrame()
-
-        if not divTable.empty or not prov.empty:
+        if not prov.empty:
             pvt = prov.pivot_table(index='Year', columns='Month', values='AMOUNT', margins=True, margins_name='Total', aggfunc='sum', fill_value=0)
             sorted_m = sorted(pvt.columns[:-1], key=lambda month: dt.datetime.strptime(month, "%B"))
             sorted_m.append(pvt.columns[-1])
-            self.pvt_div_table = pvt.reindex(sorted_m, axis=1)
+            self.pvt_div_table = pvt.reindex(sorted_m, axis=1).style.applymap(color_negative_red).format( f'{self.currency} {{:,.2f}}')
         else:
             self.pvt_div_table = pd.DataFrame()
 
@@ -383,6 +382,7 @@ class Wallet():
     def run(self, market='br'):
         self.market = market
         self.currency = currency_market_map[market]
+        pd.options.display.float_format = f'{self.currency} {{:,.2f}}'.format
         self.open_dataframe()
         self.load_statement()
         self.load_external_data()
