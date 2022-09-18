@@ -16,6 +16,7 @@ from FinanceTools import *
 from OrdersReader import *
 from IRPF_Tools import *
 
+currency_market_map = {'us': '$', 'br': 'R$', 'uk': '£'}
 class Wallet():
     def __init__(self, work_dir):
         self.work_dir = work_dir
@@ -243,7 +244,7 @@ class Wallet():
             self.realized_profit_pivot_fii = Pivot(rl[rl['TYPE'] == 'FII'])
 
     def compute_portifolio(self):
-        self.portifolio_df = Portifolio(self.prcReader, self.df, self.recomended_wallet).show()
+        self.portifolio_df = Portifolio(self.prcReader, self.df, self.recomended_wallet, self.currency).show()
 
     def compute_blueprint(self):
         p = PerformanceBlueprint(self.prcReader, self.df, dt.datetime.today().strftime('%Y-%m-%d'))
@@ -380,6 +381,7 @@ class Wallet():
 
     def run(self, market='br'):
         self.market = market
+        self.currency = currency_market_map[market]
         self.open_dataframe()
         self.load_statement()
         self.load_external_data()
