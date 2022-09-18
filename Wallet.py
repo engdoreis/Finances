@@ -222,12 +222,13 @@ class Wallet():
         rl1['AMOUNT'] = rl1['AMOUNT'].abs()
         rl1.loc['Total', 'AMOUNT'] = 0
         rl1 = rl1.fillna(' ').reset_index(drop=True)
-        self.realized_profit_df = rl1.style.applymap(color_negative_red, subset=['Profit', 'AMOUNT']).format({'AMOUNT': '$ {:,.2f}', 'Profit': '$ {:,.2f}', 'DayTrade': '{}'})
+        self.realized_profit_df = rl1.style.applymap(color_negative_red, subset=['Profit', 'AMOUNT']).format({'AMOUNT': f'{self.currency} {{:,.2f}}'\
+            , 'Profit': f'{self.currency} {{:,.2f}}', 'DayTrade': '{}'})
 
         rl1 = rl.groupby('SYMBOL').Profit.sum().reset_index()
         rl1.loc['Total', 'Profit'] = rl1['Profit'].sum()
         rl1 = rl1.fillna(' ').reset_index(drop=True)
-        self.realized_profit_by_symbol_df = rl1.style.applymap(color_negative_red, subset=['Profit']).format( {'Profit': '$ {:,.2f}'})
+        self.realized_profit_by_symbol_df = rl1.style.applymap(color_negative_red, subset=['Profit']).format( {'Profit': f'{self.currency} {{:,.2f}}'})
 
         def Pivot(tb):
             if tb.empty:
