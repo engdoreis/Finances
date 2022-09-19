@@ -94,7 +94,10 @@ def ReadOrders(indir='d:/Investing/Notas_Clear', outfile='d:/Investing/operation
     print('Pages done')
     print('Tickers merging...', end='\r')
     companyMap = companyListReader.dtFrame
-    companyMap.to_csv(outputDir + '/map.csv')
+    if companyMap.empty:
+        companyMap = pd.read_csv(outputDir + '/map.csv')
+    else:
+        companyMap.to_csv(outputDir + '/map.csv')
 
     oOrg = OrderOrganizer(tmpDir)
     oOrg.finish(companyMap)

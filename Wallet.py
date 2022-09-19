@@ -423,8 +423,8 @@ class Wallet():
 
         self.realized_profit_by_symbol_df.to_excel(writer, sheet_name='realized_profit', startrow=index)
 
-        self.div_table.to_excel(writer, sheet_name='dividends')
-        index = len(self.div_table.index) + 2
+        self.prov_month.to_excel(writer, sheet_name='dividends')
+        index = len(self.prov_month.index) + 2
         self.pvt_div_table.to_excel(writer, sheet_name='dividends', startrow=index)
 
         writer.save()
@@ -444,5 +444,5 @@ if __name__ == "__main__":
 
     wallet.export_to_excel(root + 'out.xlsx')
     wallet.generate_charts()
-    # wallet.history_chart.savefig(root + 'chart.png')
+    wallet.history_chart.savefig(root + 'chart.png')
     print('Finished')

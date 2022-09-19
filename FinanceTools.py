@@ -650,7 +650,12 @@ class CompanyListReader:
 
         def loadBmfBovespa(self):
                 url = 'https://bvmf.bmfbovespa.com.br/CapitalSocial/'
-                r = requests.get(url, headers=http_header)
+                try:
+                    r = requests.get(url, headers=http_header, timeout=5)
+                except:
+                    print(f'Error to read url: {url}')
+                    return pd.DataFrame()
+
                 rawTable = pd.read_html(r.text, thousands='.',decimal=',')[0]
                 rawTable = rawTable.iloc[:, :4] # Remove columns after 4th column.
                 rawTable.columns = ['NAME', 'CODE', 'SOCIAL_NAME', 'SEGMENT']
