@@ -248,7 +248,7 @@ class Wallet():
         self.portifolio_df = Portifolio(self.prcReader, self.df, self.recomended_wallet, self.currency).show()
 
     def compute_blueprint(self):
-        p = PerformanceBlueprint(self.prcReader, self.df, dt.datetime.today().strftime('%Y-%m-%d'))
+        p = PerformanceBlueprint(self.prcReader, self.df, dt.datetime.today().strftime('%Y-%m-%d'), currency=self.currency)
         self.blueprint_df = PerformanceViewer(p.calc()).show()
 
     def compute_taxation(self):

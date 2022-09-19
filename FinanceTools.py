@@ -488,11 +488,10 @@ class Profit:
         return dayGroup.apply(self.DayTrade, axis=1)
 
 #     -------------------------------------------------------------------------------------------------
-
 class Portifolio:
     def __init__(self, priceReader, dFrame, recommended=None, currency='$'):
         self.currency = currency
-        self.dtframe = dFrame.groupby(['SYMBOL']).apply(lambda x: x.tail(1) )
+        self.dtframe = dFrame.groupby(['SYMBOL']).apply(lambda x: x.tail(1))
 
         dFrame = dFrame.sort_values(['PAYDATE', 'OPERATION'], ascending=[True, False])
         dFrame=dFrame.apply(TableAccumulator().Cash, axis=1)
@@ -549,22 +548,18 @@ class Portifolio:
 
     def show(self):
         fdf = self.dtframe
-        # fdf.loc['AMOUNT', 'COST'] = fdf['COST'].sum()
-        # fdf.loc['AMOUNT', 'MKT_VALUE'] = fdf['MKT_VALUE'].sum()
-        # fdf.loc['AMOUNT', 'GAIN($)'] = fdf['GAIN($)'].sum()
-        # fdf.fillna(' ', inplace=True)
         return fdf.style.applymap(color_negative_red)\
                .format(self.format)
 
 #     -------------------------------------------------------------------------------------------------
 class PerformanceBlueprint:
-    def __init__(self, priceReader, dataframe, date):
+    def __init__(self, priceReader, dataframe, date, currency='R$'):
+        self.currency=currency
         self.pcRdr = priceReader
         self.equity = self.cost = self.realizedProfit = self.div = self.paperProfit = self.profit \
         = self.usdIbov = self.ibov = self.sp500 = self.profitRate = self.expense = 0
         self.date = date
-        self.df = dataframe[(dataframe['DATE'] <= date)]
-        # display(self.df)
+        self.df = dataframe[(dataframe['DATE'] <= date)].copy(deep=True)
         if (not self.df.empty):
             priceReader.setFillDate(self.date)
             self.pt = Portifolio(self.pcRdr,self.df)
@@ -608,15 +603,15 @@ class Acumulator:
         return self.acumulated
 class PerformanceViewer:
     def __init__(self, *args):
-        self.pf = pd.DataFrame(columns = ['Item', 'USD', 'BRL', '%'])
+        self.pf = pd.DataFrame(columns = ['Item', 'BRL', 'USD', '%'])
         if (len(args) == 2 and isinstance(args[0], pd.DataFrame)):
             row = args[0].set_index('Date').loc[args[1]]
             self.buildTable(row['Equity'], row['Cost'], row['Expense'], row['paperProfit'], row['Profit'], row['Div'], row['TotalProfit'])
         elif(isinstance(args[0], PerformanceBlueprint)):
             p = args[0]
-            self.buildTable(p.equity, p.cost, p.expense, p.paperProfit, p.realizedProfit, p.div, p.profit, p.exchangeRatio)
+            self.buildTable(p.equity, p.cost, p.expense, p.paperProfit, p.realizedProfit, p.div, p.profit, p.currency, p.exchangeRatio)
 
-    def buildTable(self, equity, cost, expense, paperProfit, profit, div, totalProfit, exchangeRatio=0.22):
+    def buildTable(self, equity, cost, expense, paperProfit, profit, div, totalProfit, currency='$', exchangeRatio=0.22):
         self.pf.loc[len(self.pf)] = ['Equity          ' , equity,equity, equity/cost]
         self.pf.loc[len(self.pf)] = ['Cost            ' , cost,cost, 1]
         self.pf.loc[len(self.pf)] = ['Expenses        ' , expense,expense, expense/cost]
@@ -625,7 +620,10 @@ class PerformanceViewer:
         self.pf.loc[len(self.pf)] = ['Dividends       ' , div,div, div/cost]
         self.pf.loc[len(self.pf)] = ['Total Profit    ' , totalProfit,totalProfit, totalProfit/cost]
         self.pf.loc[:, '%'] *= 100
-        self.pf.loc[:, 'BRL'] /= exchangeRatio
+        if currency == '$':
+            self.pf.loc[:, 'BRL'] /= exchangeRatio
+        else:
+            self.pf.loc[:, 'USD'] *= exchangeRatio
         self.pf.set_index('Item', inplace=True)
 
     def show(self):
