@@ -16,6 +16,7 @@ from FinanceTools import *
 from OrdersReader import *
 from IRPF_Tools import *
 
+currency_market_map = {'us': '$', 'br': 'R$', 'uk': '£'}
 class Wallet():
     def __init__(self, work_dir):
         self.work_dir = work_dir
@@ -221,12 +222,13 @@ class Wallet():
         rl1['AMOUNT'] = rl1['AMOUNT'].abs()
         rl1.loc['Total', 'AMOUNT'] = 0
         rl1 = rl1.fillna(' ').reset_index(drop=True)
-        self.realized_profit_df = rl1.style.applymap(color_negative_red, subset=['Profit', 'AMOUNT']).format({'AMOUNT': '$ {:,.2f}', 'Profit': '$ {:,.2f}', 'DayTrade': '{}'})
+        self.realized_profit_df = rl1.style.applymap(color_negative_red, subset=['Profit', 'AMOUNT']).format({'AMOUNT': f'{self.currency} {{:,.2f}}'\
+            , 'Profit': f'{self.currency} {{:,.2f}}', 'DayTrade': '{}'})
 
         rl1 = rl.groupby('SYMBOL').Profit.sum().reset_index()
         rl1.loc['Total', 'Profit'] = rl1['Profit'].sum()
         rl1 = rl1.fillna(' ').reset_index(drop=True)
-        self.realized_profit_by_symbol_df = rl1.style.applymap(color_negative_red, subset=['Profit']).format( {'Profit': '$ {:,.2f}'})
+        self.realized_profit_by_symbol_df = rl1.style.applymap(color_negative_red, subset=['Profit']).format( {'Profit': f'{self.currency} {{:,.2f}}'})
 
         def Pivot(tb):
             if tb.empty:
@@ -243,10 +245,10 @@ class Wallet():
             self.realized_profit_pivot_fii = Pivot(rl[rl['TYPE'] == 'FII'])
 
     def compute_portifolio(self):
-        self.portifolio_df = Portifolio(self.prcReader, self.df, self.recomended_wallet).show()
+        self.portifolio_df = Portifolio(self.prcReader, self.df, self.recomended_wallet, self.currency).show()
 
     def compute_blueprint(self):
-        p = PerformanceBlueprint(self.prcReader, self.df, dt.datetime.today().strftime('%Y-%m-%d'))
+        p = PerformanceBlueprint(self.prcReader, self.df, dt.datetime.today().strftime('%Y-%m-%d'), currency=self.currency)
         self.blueprint_df = PerformanceViewer(p.calc()).show()
 
     def compute_taxation(self):
@@ -268,45 +270,44 @@ class Wallet():
              .to_excel(self.work_dir + 'tx_dtacao.xlsx')
 
     def compute_dividends(self):
-        m = int(dt.datetime.today().strftime("%m"))
-        y = int(dt.datetime.today().strftime("%Y"))
+        self.prov_month = pd.DataFrame()
+        for n in range(1, -1, -1):
+            date = dt.datetime.today() - pd.DateOffset(months=n)
+
+            m = int(date.strftime("%m"))
+            y = int(date.strftime("%Y"))
+            prov_df = self.df[(self.df['PAYDATE'].dt.month == m) & (self.df['PAYDATE'].dt.year == y)]
+            if prov_df.empty:
+                continue
+
+            prov_month = prov_df[prov_df['OPERATION'].isin('D R JCP A'.split())].copy(deep=True)
+            if prov_month.empty:
+                prov_month = prov_df[prov_df['OPERATION'].isin('D1 R1 JCP1 A1'.split())].copy(deep=True)
+
+            if prov_month.empty:
+                continue
+
+            m_name = date.strftime("%B")
+            prov_month = prov_month[['PAYDATE', 'SYMBOL','AMOUNT']]
+            prov_month.columns = ['DATE', 'SYMBOL', self.currency]
+            prov_month = prov_month.groupby(['SYMBOL', 'DATE'])[self.currency].sum().reset_index()
+            prov_month.sort_values('DATE', inplace=True)
+            prov_month['DATE'] = prov_month['DATE'].apply(lambda x: x.strftime('%Y-%m-%d'))
+            prov_month.loc['Total', self.currency] = prov_month[self.currency].sum()
+            prov_month['MONTH'] = date.strftime("%B")
+            self.prov_month = pd.concat([self.prov_month, prov_month.fillna(' ').reset_index(drop=True)])
+        self.prov_month.set_index(['MONTH', 'SYMBOL'], inplace=True)
 
 
-        divTable = self.divReader.df
         prov = self.df[self.df['OPERATION'].isin('D1 R1 JCP1 A1'.split())]
         if prov.empty:
             prov = self.df[self.df['OPERATION'].isin('D R JCP A'.split())]
 
-        try:
-            if divTable.empty or prov.empty:
-                raise
-
-            divTable = divTable.reset_index()
-            divTable['PAYDATE'] = pd.to_datetime(divTable['PAYDATE'])
-            divTable = divTable[(divTable['PAYDATE'].dt.month == m) & (divTable['PAYDATE'].dt.year == y)]
-            if divTable.empty:
-                raise
-
-            divTable= pd.merge(divTable, prov, how='inner', on=['PAYDATE', 'DATE', 'SYMBOL', 'PRICE'])
-            if divTable.empty:
-                raise
-
-            divTable = divTable[['PAYDATE', 'SYMBOL','AMOUNT']]
-            divTable.columns = ['DATE', 'PAYDATE', 'R$']
-            divTable = divTable.groupby(['SYMBOL', 'DATE'])['R$'].sum().reset_index()
-            # display(divTable)
-            divTable.sort_values('DATE', inplace=True)
-            divTable['DATE'] = divTable['DATE'].apply(lambda x: x.strftime('%Y-%m-%d'))
-            divTable.loc['Total', 'R$'] = divTable['R$'].sum()
-            self.div_table = divTable.fillna(' ').reset_index(drop=True)
-        except:
-            self.div_table = pd.DataFrame()
-
-        if not divTable.empty or not prov.empty:
+        if not prov.empty:
             pvt = prov.pivot_table(index='Year', columns='Month', values='AMOUNT', margins=True, margins_name='Total', aggfunc='sum', fill_value=0)
             sorted_m = sorted(pvt.columns[:-1], key=lambda month: dt.datetime.strptime(month, "%B"))
             sorted_m.append(pvt.columns[-1])
-            self.pvt_div_table = pvt.reindex(sorted_m, axis=1)
+            self.pvt_div_table = pvt.reindex(sorted_m, axis=1).style.applymap(color_negative_red).format( f'{self.currency} {{:,.2f}}')
         else:
             self.pvt_div_table = pd.DataFrame()
 
@@ -316,14 +317,17 @@ class Wallet():
 
         if(period.lower() != 'all'):
             frequency = 'W'  
-            days = int(period.split(' ')[0]) * 365
-            wishedStart = dt.datetime.today() - pd.Timedelta(days, unit='d')
+            wishedStart = dt.datetime.today() - pd.DateOffset(years=int(period.split(' ')[0]))
             if(pd.to_datetime(startPlot) < pd.to_datetime(wishedStart)):
-                startPlot = wishedStart.strftime('%Y-%m-%d')   
+                startPlot = wishedStart.strftime('%Y-%m-%d')
 
         monthList = pd.date_range(start=startPlot, end=dt.datetime.today(), freq=frequency).format(formatter=lambda x: x.strftime('%Y-%m-%d'))
         monthList.append(dt.datetime.today().strftime('%Y-%m-%d'))
         performanceList = []
+        if(period.lower() == 'all'):
+            date = startPlot - pd.DateOffset(weeks=(2 if frequency == 'SM' else 1))
+            performanceList.append([startPlot - pd.DateOffset(weeks=2), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+
         for i, month in enumerate(monthList):
             p = PerformanceBlueprint(self.prcReader, self.df, month)
             p.calc()
@@ -331,10 +335,10 @@ class Wallet():
 
         histProfDF = pd.DataFrame(performanceList, columns=['Date', 'Equity', 'Cost', 'Profit', 'Div', 'paperProfit', 'TotalProfit', '%Profit', 'Expense', '%IBOV', '%SP500'])
         histProfDF['Date'] = pd.to_datetime(histProfDF.Date, format='%Y/%m/%d')
-        # if (startTimePicker.value == "12 months"):
-        histProfDF['%IBOV']   = histProfDF['%IBOV'] - histProfDF.iloc[0]['%IBOV']
-        histProfDF['%SP500']  = histProfDF['%SP500'] - histProfDF.iloc[0]['%SP500']
-        histProfDF['%Profit'] = histProfDF['%Profit'] - histProfDF.iloc[0]['%Profit']
+        if (period.lower() != "all"):
+            histProfDF['%IBOV']   -= histProfDF.iloc[0,'%IBOV']
+            histProfDF['%SP500']  -= histProfDF.iloc[0,'%SP500']
+            histProfDF['%Profit'] -= histProfDF.iloc[0,'%Profit']
         self.historic_profit_df = histProfDF
         self.history_df_frequency = frequency
 
@@ -380,6 +384,8 @@ class Wallet():
 
     def run(self, market='br'):
         self.market = market
+        self.currency = currency_market_map[market]
+        pd.options.display.float_format = f'{self.currency} {{:,.2f}}'.format
         self.open_dataframe()
         self.load_statement()
         self.load_external_data()
@@ -420,8 +426,8 @@ class Wallet():
 
         self.realized_profit_by_symbol_df.to_excel(writer, sheet_name='realized_profit', startrow=index)
 
-        self.div_table.to_excel(writer, sheet_name='dividends')
-        index = len(self.div_table.index) + 2
+        self.prov_month.to_excel(writer, sheet_name='dividends')
+        index = len(self.prov_month.index) + 2
         self.pvt_div_table.to_excel(writer, sheet_name='dividends', startrow=index)
 
         writer.save()
@@ -441,5 +447,5 @@ if __name__ == "__main__":
 
     wallet.export_to_excel(root + 'out.xlsx')
     wallet.generate_charts()
-    # wallet.history_chart.savefig(root + 'chart.png')
+    wallet.history_chart.savefig(root + 'chart.png')
     print('Finished')

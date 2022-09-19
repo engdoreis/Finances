@@ -488,10 +488,10 @@ class Profit:
         return dayGroup.apply(self.DayTrade, axis=1)
 
 #     -------------------------------------------------------------------------------------------------
-
 class Portifolio:
-    def __init__(self, priceReader, dFrame, recommended=None):
-        self.dtframe = dFrame.groupby(['SYMBOL']).apply(lambda x: x.tail(1) )
+    def __init__(self, priceReader, dFrame, recommended=None, currency='$'):
+        self.currency = currency
+        self.dtframe = dFrame.groupby(['SYMBOL']).apply(lambda x: x.tail(1))
 
         dFrame = dFrame.sort_values(['PAYDATE', 'OPERATION'], ascending=[True, False])
         dFrame=dFrame.apply(TableAccumulator().Cash, axis=1)
@@ -511,21 +511,21 @@ class Portifolio:
         newLine = {'SYMBOL':'CASH', 'PM':cash, 'QUANTITY':1, 'DIVIDENDS':0, 'TYPE':'C', 'COST':cash, 'PRICE':cash, 'MKT_VALUE':cash}
         self.dtframe = pd.concat([self.dtframe, pd.DataFrame(newLine, index=[0])])
         
-        self.dtframe['GAIN($)'] = self.dtframe['MKT_VALUE'] - self.dtframe['COST']
-        self.dtframe['GAIN+DIV($)'] = self.dtframe['GAIN($)'] + self.dtframe['DIVIDENDS']
-        self.dtframe['GAIN(%)'] = self.dtframe['GAIN($)'] / self.dtframe['COST'] *100
-        self.dtframe['GAIN+DIV(%)'] = self.dtframe['GAIN+DIV($)'] / self.dtframe['COST'] * 100
+        self.dtframe[f'GAIN({currency})'] = self.dtframe['MKT_VALUE'] - self.dtframe['COST']
+        self.dtframe[f'GAIN+DIV({currency})'] = self.dtframe[f'GAIN({currency})'] + self.dtframe['DIVIDENDS']
+        self.dtframe['GAIN(%)'] = self.dtframe[f'GAIN({currency})'] / self.dtframe['COST'] *100
+        self.dtframe['GAIN+DIV(%)'] = self.dtframe[f'GAIN+DIV({currency})'] / self.dtframe['COST'] * 100
         self.dtframe['ALLOCATION'] = (self.dtframe['MKT_VALUE'] / self.dtframe['MKT_VALUE'].sum()) * 100
         self.dtframe = self.dtframe.replace([np.inf, -np.inf], np.nan).fillna(0)
 
         self.dtframe = self.dtframe[self.dtframe['PM'] > 0]
 
-        self.dtframe = self.dtframe[['SYMBOL', 'PM', 'PRICE', 'QUANTITY', 'COST', 'MKT_VALUE', 'DIVIDENDS', 'GAIN($)', 'GAIN+DIV($)',\
+        self.dtframe = self.dtframe[['SYMBOL', 'PM', 'PRICE', 'QUANTITY', 'COST', 'MKT_VALUE', 'DIVIDENDS', f'GAIN({currency})', f'GAIN+DIV({currency})',\
                                      'GAIN(%)', 'GAIN+DIV(%)', 'ALLOCATION']]
 
-        self.format = {'PRICE': '$ {:,.2f}', 'PM': '$ {:.2f}', 'QUANTITY': '{:>n}', 'COST': '$ {:,.2f}', 'MKT_VALUE': '$ {:,.2f}',\
-                       'DIVIDENDS': '$ {:,.2f}', 'GAIN($)': '$ {:,.2f}', 'GAIN+DIV($)': '$ {:,.2f}', 'GAIN(%)': '{:,.2f}%',\
-                       'GAIN+DIV(%)': '{:,.2f}%', 'ALLOCATION': '{:,.2f}%'}
+        self.format = {'PRICE': f'{currency} {{:,.2f}}', 'PM': f'{currency} {{:,.2f}}', 'QUANTITY': '{:>n}', 'COST': f'{currency} {{:,.2f}}',\
+                       'MKT_VALUE': f'{currency} {{:,.2f}}', 'DIVIDENDS': f'{currency} {{:,.2f}}', f'GAIN({currency})': f'{currency} {{:,.2f}}',\
+                    f'GAIN+DIV({currency})': f'{currency} {{:,.2f}}', 'GAIN(%)': '{:,.2f}%', 'GAIN+DIV(%)': '{:,.2f}%', 'ALLOCATION': '{:,.2f}%'}
 
         self.extra_content(recommended)
 
@@ -537,7 +537,7 @@ class Portifolio:
 
         self.dtframe['TARGET'], self.dtframe['TOP_PRICE'], self.dtframe['PRIORITY'] = zip(*self.dtframe['SYMBOL'].map(lambda x: self.recommended(recommended, x)))
         self.dtframe['BUY'] = (self.dtframe['QUANTITY'] * (self.dtframe['TARGET']/100 - self.dtframe['ALLOCATION']/100)) / (self.dtframe['ALLOCATION']/100)
-        format = {'TARGET': '{:,.2f}%', 'TOP_PRICE': '$ {:,.2f}', 'BUY': '{:,.1f}'}
+        format = {'TARGET': '{:,.2f}%', 'TOP_PRICE': f'{self.currency} {{:,.2f}}', 'BUY': '{:,.1f}'}
         self.format = {**self.format , **format}
     
     def recommended(self, recom, symbol):
@@ -548,22 +548,18 @@ class Portifolio:
 
     def show(self):
         fdf = self.dtframe
-        # fdf.loc['AMOUNT', 'COST'] = fdf['COST'].sum()
-        # fdf.loc['AMOUNT', 'MKT_VALUE'] = fdf['MKT_VALUE'].sum()
-        # fdf.loc['AMOUNT', 'GAIN($)'] = fdf['GAIN($)'].sum()
-        # fdf.fillna(' ', inplace=True)
         return fdf.style.applymap(color_negative_red)\
                .format(self.format)
 
 #     -------------------------------------------------------------------------------------------------
 class PerformanceBlueprint:
-    def __init__(self, priceReader, dataframe, date):
+    def __init__(self, priceReader, dataframe, date, currency='R$'):
+        self.currency=currency
         self.pcRdr = priceReader
         self.equity = self.cost = self.realizedProfit = self.div = self.paperProfit = self.profit \
         = self.usdIbov = self.ibov = self.sp500 = self.profitRate = self.expense = 0
         self.date = date
-        self.df = dataframe[(dataframe['DATE'] <= date)]
-        # display(self.df)
+        self.df = dataframe[(dataframe['DATE'] <= date)].copy(deep=True)
         if (not self.df.empty):
             priceReader.setFillDate(self.date)
             self.pt = Portifolio(self.pcRdr,self.df)
@@ -607,15 +603,15 @@ class Acumulator:
         return self.acumulated
 class PerformanceViewer:
     def __init__(self, *args):
-        self.pf = pd.DataFrame(columns = ['Item', 'USD', 'BRL', '%'])
+        self.pf = pd.DataFrame(columns = ['Item', 'BRL', 'USD', '%'])
         if (len(args) == 2 and isinstance(args[0], pd.DataFrame)):
             row = args[0].set_index('Date').loc[args[1]]
             self.buildTable(row['Equity'], row['Cost'], row['Expense'], row['paperProfit'], row['Profit'], row['Div'], row['TotalProfit'])
         elif(isinstance(args[0], PerformanceBlueprint)):
             p = args[0]
-            self.buildTable(p.equity, p.cost, p.expense, p.paperProfit, p.realizedProfit, p.div, p.profit, p.exchangeRatio)
+            self.buildTable(p.equity, p.cost, p.expense, p.paperProfit, p.realizedProfit, p.div, p.profit, p.currency, p.exchangeRatio)
 
-    def buildTable(self, equity, cost, expense, paperProfit, profit, div, totalProfit, exchangeRatio=0.22):
+    def buildTable(self, equity, cost, expense, paperProfit, profit, div, totalProfit, currency='$', exchangeRatio=0.22):
         self.pf.loc[len(self.pf)] = ['Equity          ' , equity,equity, equity/cost]
         self.pf.loc[len(self.pf)] = ['Cost            ' , cost,cost, 1]
         self.pf.loc[len(self.pf)] = ['Expenses        ' , expense,expense, expense/cost]
@@ -624,7 +620,10 @@ class PerformanceViewer:
         self.pf.loc[len(self.pf)] = ['Dividends       ' , div,div, div/cost]
         self.pf.loc[len(self.pf)] = ['Total Profit    ' , totalProfit,totalProfit, totalProfit/cost]
         self.pf.loc[:, '%'] *= 100
-        self.pf.loc[:, 'BRL'] /= exchangeRatio
+        if currency == '$':
+            self.pf.loc[:, 'BRL'] /= exchangeRatio
+        else:
+            self.pf.loc[:, 'USD'] *= exchangeRatio
         self.pf.set_index('Item', inplace=True)
 
     def show(self):
@@ -638,17 +637,26 @@ import string
 import re
 
 class CompanyListReader:
-        deprecatedList = ['SMLE3', 'TBLE3', 'VNET3']
-
         def __init__(self):
-                self.dtFrame = self.loadFundamentus()
-                #Remove deprecated
-                self.dtFrame = self.dtFrame[~self.dtFrame['Paper'].isin(self.deprecatedList)]
+                self.dtFrame = self.loadBmfBovespa()
         
         def loadInfomoney(self):
                 url = 'https://www.infomoney.com.br/minhas-financas/confira-o-cnpj-das-acoes-negociadas-em-bolsa-e-saiba-como-declarar-no-imposto-de-renda/'
                 r = requests.get(url, headers=http_header)
                 rawTable = pd.read_html(r.text, thousands='.',decimal=',')[0]
+                return rawTable
+
+        def loadBmfBovespa(self):
+                url = 'https://bvmf.bmfbovespa.com.br/CapitalSocial/'
+                try:
+                    r = requests.get(url, headers=http_header, timeout=5)
+                except:
+                    print(f'Error to read url: {url}')
+                    return pd.DataFrame()
+
+                rawTable = pd.read_html(r.text, thousands='.',decimal=',')[0]
+                rawTable = rawTable.iloc[:, :4] # Remove columns after 4th column.
+                rawTable.columns = ['NAME', 'CODE', 'SOCIAL_NAME', 'SEGMENT']
                 return rawTable
 
         def loadOceans(self):
@@ -657,7 +665,7 @@ class CompanyListReader:
                 rawTable = pd.read_html(r.text, thousands='.',decimal=',')[0]
                 return rawTable
 
-        def loadGuia(self):
+        def loadGuiaInvest(self):
                 pageAmount = 10
                 rawTable = pd.DataFrame()
                 url = 'https://www.guiainvest.com.br/lista-acoes/default.aspx?listaacaopage='
@@ -669,7 +677,6 @@ class CompanyListReader:
 
                 for i in range(1, pageAmount):
                     r = requests.get(url + str(i), headers=http_header)
-                    # rawTable = rawTable.append(pd.read_html(r.text, thousands='.',decimal=',')[0].drop(['Unnamed: 0', 'Atividade Principal'], axis=1))
                     rawTable = pd.concat([rawTable, pd.read_html(r.text, thousands='.',decimal=',')[0].drop(['Unnamed: 0', 'Atividade Principal'], axis=1)])
 
                 return rawTable.reset_index(drop=True)

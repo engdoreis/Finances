@@ -20,26 +20,28 @@ class OrderOrganizer:
             self.dtFrame = self.dtFrame.merge(pd.read_csv(file), how='outer')
 
     def partialMatch(self, row):
+        code = row['Code']
         if ('FII' in row['Category']):
-            row['Paper'] = row['Code']
-        elif (str(row['Paper']) == 'nan'):
-            filter = self.cmpMap['Company'].str.contains(row.Company)  
-            if(not filter.any()):
-                filter = self.cmpMap['FullName'].str.contains(row.Company)
-            if(not filter.any()):
-                filter = self.cmpMap['Company'].isin(row.Company.split(' '))
+            row['Paper'] = code
+        else:
+            code_number = 0
+            if 'PN' in code:
+                code_number = 4
+            elif 'ON' in code:
+                code_number = 3
+            elif 'UNT' in code:
+                code_number = 11
+            else:
+                raise f'Unknown stock type: {code}'
 
-            df = self.cmpMap[filter & (self.cmpMap.Sub == row.Sub)]
-
-            if(not df.empty):
-                row['Paper'] = df.iloc[0]['Paper']
+            row['Paper'] = row['CODE'] + str(code_number)
                 
         return row
 
     def finish(self, cmpMap):
-        if(self.dtFrame['Code'].str.contains('ON|PN').any()):
+        if(self.dtFrame['Code'].str.contains('ON|PN|UNT').any()):
             self.cmpMap = cmpMap
-            self.dtFrame = self.dtFrame.merge(self.cmpMap, how='left', on=['Company', 'Sub'])
+            self.dtFrame = self.dtFrame.merge(self.cmpMap, how='left', left_on='Company', right_on='NAME')
             self.dtFrame = self.dtFrame.apply(self.partialMatch, axis=1).reset_index(drop=True)
             self.dtFrame['Date'] = pd.to_datetime(self.dtFrame['Date'])
             self.dtFrame = self.dtFrame.sort_values('Date').reset_index(drop=True)
@@ -92,7 +94,10 @@ def ReadOrders(indir='d:/Investing/Notas_Clear', outfile='d:/Investing/operation
     print('Pages done')
     print('Tickers merging...', end='\r')
     companyMap = companyListReader.dtFrame
-    companyMap.to_csv(outputDir + '/map.csv')
+    if companyMap.empty:
+        companyMap = pd.read_csv(outputDir + '/map.csv')
+    else:
+        companyMap.to_csv(outputDir + '/map.csv')
 
     oOrg = OrderOrganizer(tmpDir)
     oOrg.finish(companyMap)
