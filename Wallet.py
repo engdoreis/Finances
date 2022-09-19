@@ -317,14 +317,17 @@ class Wallet():
 
         if(period.lower() != 'all'):
             frequency = 'W'  
-            days = int(period.split(' ')[0]) * 365
-            wishedStart = dt.datetime.today() - pd.Timedelta(days, unit='d')
+            wishedStart = dt.datetime.today() - pd.DateOffset(years=int(period.split(' ')[0]))
             if(pd.to_datetime(startPlot) < pd.to_datetime(wishedStart)):
-                startPlot = wishedStart.strftime('%Y-%m-%d')   
+                startPlot = wishedStart.strftime('%Y-%m-%d')
 
         monthList = pd.date_range(start=startPlot, end=dt.datetime.today(), freq=frequency).format(formatter=lambda x: x.strftime('%Y-%m-%d'))
         monthList.append(dt.datetime.today().strftime('%Y-%m-%d'))
         performanceList = []
+        if(period.lower() == 'all'):
+            date = startPlot - pd.DateOffset(weeks=(2 if frequency == 'SM' else 1))
+            performanceList.append([startPlot - pd.DateOffset(weeks=2), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+
         for i, month in enumerate(monthList):
             p = PerformanceBlueprint(self.prcReader, self.df, month)
             p.calc()
@@ -332,10 +335,10 @@ class Wallet():
 
         histProfDF = pd.DataFrame(performanceList, columns=['Date', 'Equity', 'Cost', 'Profit', 'Div', 'paperProfit', 'TotalProfit', '%Profit', 'Expense', '%IBOV', '%SP500'])
         histProfDF['Date'] = pd.to_datetime(histProfDF.Date, format='%Y/%m/%d')
-        # if (startTimePicker.value == "12 months"):
-        histProfDF['%IBOV']   = histProfDF['%IBOV'] - histProfDF.iloc[0]['%IBOV']
-        histProfDF['%SP500']  = histProfDF['%SP500'] - histProfDF.iloc[0]['%SP500']
-        histProfDF['%Profit'] = histProfDF['%Profit'] - histProfDF.iloc[0]['%Profit']
+        if (period.lower() != "all"):
+            histProfDF['%IBOV']   -= histProfDF.iloc[0,'%IBOV']
+            histProfDF['%SP500']  -= histProfDF.iloc[0,'%SP500']
+            histProfDF['%Profit'] -= histProfDF.iloc[0,'%Profit']
         self.historic_profit_df = histProfDF
         self.history_df_frequency = frequency
 
