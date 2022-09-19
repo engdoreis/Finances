@@ -639,17 +639,21 @@ import string
 import re
 
 class CompanyListReader:
-        deprecatedList = ['SMLE3', 'TBLE3', 'VNET3']
-
         def __init__(self):
-                self.dtFrame = self.loadFundamentus()
-                #Remove deprecated
-                self.dtFrame = self.dtFrame[~self.dtFrame['Paper'].isin(self.deprecatedList)]
+                self.dtFrame = self.loadBmfBovespa()
         
         def loadInfomoney(self):
                 url = 'https://www.infomoney.com.br/minhas-financas/confira-o-cnpj-das-acoes-negociadas-em-bolsa-e-saiba-como-declarar-no-imposto-de-renda/'
                 r = requests.get(url, headers=http_header)
                 rawTable = pd.read_html(r.text, thousands='.',decimal=',')[0]
+                return rawTable
+
+        def loadBmfBovespa(self):
+                url = 'https://bvmf.bmfbovespa.com.br/CapitalSocial/'
+                r = requests.get(url, headers=http_header)
+                rawTable = pd.read_html(r.text, thousands='.',decimal=',')[0]
+                rawTable = rawTable.iloc[:, :4] # Remove columns after 4th column.
+                rawTable.columns = ['NAME', 'CODE', 'SOCIAL_NAME', 'SEGMENT']
                 return rawTable
 
         def loadOceans(self):
@@ -658,7 +662,7 @@ class CompanyListReader:
                 rawTable = pd.read_html(r.text, thousands='.',decimal=',')[0]
                 return rawTable
 
-        def loadGuia(self):
+        def loadGuiaInvest(self):
                 pageAmount = 10
                 rawTable = pd.DataFrame()
                 url = 'https://www.guiainvest.com.br/lista-acoes/default.aspx?listaacaopage='
@@ -670,7 +674,6 @@ class CompanyListReader:
 
                 for i in range(1, pageAmount):
                     r = requests.get(url + str(i), headers=http_header)
-                    # rawTable = rawTable.append(pd.read_html(r.text, thousands='.',decimal=',')[0].drop(['Unnamed: 0', 'Atividade Principal'], axis=1))
                     rawTable = pd.concat([rawTable, pd.read_html(r.text, thousands='.',decimal=',')[0].drop(['Unnamed: 0', 'Atividade Principal'], axis=1)])
 
                 return rawTable.reset_index(drop=True)
