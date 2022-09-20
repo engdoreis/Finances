@@ -326,15 +326,18 @@ class Wallet():
         performanceList = []
         if(period.lower() == 'all'):
             date = startPlot - pd.DateOffset(weeks=(2 if frequency == 'SM' else 1))
-            performanceList.append([startPlot - pd.DateOffset(weeks=2), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+            performanceList.append([startPlot - pd.DateOffset(weeks=2), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
 
         for i, month in enumerate(monthList):
-            p = PerformanceBlueprint(self.prcReader, self.df, month)
-            p.calc()
-            performanceList.append([p.date, p.equity, p.cost, p.realizedProfit, p.div, p.paperProfit, p.profit, p.profitRate, p.expense, p.ibov, p.sp500])
+            p = PerformanceBlueprint(self.prcReader, self.df, month).calc()
+            performanceList.append([p.date, p.equity, p.cost, p.realizedProfit, p.div, p.paperProfit, p.profit, p.profitRate, p.expense, p.ibov, p.sp500, p.selic])
 
-        histProfDF = pd.DataFrame(performanceList, columns=['Date', 'Equity', 'Cost', 'Profit', 'Div', 'paperProfit', 'TotalProfit', '%Profit', 'Expense', '%IBOV', '%SP500'])
+        histProfDF = pd.DataFrame(performanceList, columns=['Date', 'Equity', 'Cost', 'Profit', 'Div', 'paperProfit', 'TotalProfit', '%Profit', 'Expense', '%IBOV', '%SP500', 'SELIC'])
         histProfDF['Date'] = pd.to_datetime(histProfDF.Date, format='%Y/%m/%d')
+        period_days = 365 / (15 if frequency == 'SM' else 7)
+        histProfDF['SELIC'] = histProfDF['SELIC'].apply(lambda y: ((y + 1) ** (1 / period_days)))
+        histProfDF['SELIC'] = histProfDF['SELIC'].cumprod() - 1
+
         if (period.lower() != "all"):
             histProfDF['%IBOV']   -= histProfDF.iloc[0,'%IBOV']
             histProfDF['%SP500']  -= histProfDF.iloc[0,'%SP500']
@@ -356,6 +359,7 @@ class Wallet():
         ax[0].plot(histProfDF.Date, histProfDF['%IBOV'], label='ibovespa')
         ax[0].plot(histProfDF.Date, histProfDF['%SP500'], label='S&P500')
         ax[0].plot(histProfDF.Date, histProfDF['%Profit'], label='Wallet')
+        ax[0].plot(histProfDF.Date, histProfDF['SELIC'], label='CDB')
 
         minTick = min(histProfDF['%IBOV'].min(), histProfDF['%SP500'].min(), histProfDF['%Profit'].min())
         maxTick = max(histProfDF['%IBOV'].max(), histProfDF['%SP500'].max(), histProfDF['%Profit'].max())
@@ -367,13 +371,12 @@ class Wallet():
         ax[0].legend()
 
         barsDf = histProfDF[:-1]
-        # ax[1].grid(True, which='both')
         ax[1].bar(barsDf.Date - shift, barsDf['Equity'], width, label='Equity')
         ax[1].bar(barsDf.Date - shift, barsDf['Div']   , width, bottom=barsDf['Equity'], label='Div')
         ax[1].bar(barsDf.Date - shift, barsDf['Profit'], width, bottom=barsDf['Div'] + barsDf['Equity'], label='Profit')
         ax[1].bar(barsDf.Date + shift, barsDf['Cost']  , width, label='Cost')
         ax[1].legend()
-        ax[1].set_ylabel('R$')
+        ax[1].set_ylabel(self.currency)
 
         plt.xticks(barsDf['Date'], rotation=90)
         plt.xlabel('Date')
