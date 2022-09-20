@@ -205,7 +205,7 @@ class Wallet():
         self.df = self.df.drop('OPERATION_ORDER', axis=1)
 
         #Calc the average price and rename the columns names
-        self.df=self.df.groupby(['SYMBOL']).apply(TableAccumulator(self.prcReader).ByGroup).reset_index(drop=True)
+        self.df=self.df.groupby(['SYMBOL'], group_keys=False).apply(TableAccumulator(self.prcReader).ByGroup).reset_index(drop=True)
         self.df = self.df.sort_values(['PAYDATE', 'OPERATION'], ascending=[True, False])
         self.df=self.df.apply(TableAccumulator(self.prcReader).Cash, axis=1).reset_index(drop=True)
   
@@ -213,7 +213,7 @@ class Wallet():
         profit = Profit()
         tmp = self.df.sort_values(by=['DATE', 'OPERATION'], ascending=[True, True])
         tmp.reset_index(drop=True)
-        self.df = tmp.groupby(['SYMBOL', 'DATE']).apply(profit.Trade).reset_index(drop=True)
+        self.df = tmp.groupby(['SYMBOL', 'DATE'], group_keys=False).apply(profit.Trade).reset_index(drop=True)
         self.df.sort_values(['PAYDATE', 'OPERATION'], ascending=[True, False]).to_csv(f'debug/df_log_{self.market}.tsv', sep='\t')
 
         rl = self.df[self.df.OPERATION == 'S'][['DATE', 'SYMBOL', 'TYPE', 'AMOUNT', 'Profit', 'DayTrade', 'Month', 'Year']]
