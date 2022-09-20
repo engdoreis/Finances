@@ -83,8 +83,8 @@ class PriceReader:
         indexList = ['^BVSP', '^GSPC', 'BRLUSD=X']
         self.brlIndex = self.readUSData(indexList, self.startDate).reset_index()
         self.brlIndex.rename(columns={'^BVSP':'IBOV', '^GSPC':'S&P500', 'BRLUSD=X':'USD'}, inplace=True)
+        self.brlIndex = self.brlIndex.merge(self.read_br_selic(self.startDate), on='Date')
         self.brlIndex = self.brlIndex.set_index('Date')
-        # display(self.brlIndex)
 
     def setFillDate(self, date):
         self.fillDate = date
@@ -112,6 +112,12 @@ class PriceReader:
         dfs = tks.history(start=startDate)[['Close']]
         dfs.columns = dfs.columns.droplevel()
         return dfs
+    
+    def read_br_selic(self, startDate='2018-01-01'):
+        from bcb import sgs
+        selic = sgs.get({'selic':432}, start = startDate)
+        selic['selic'] /= 100
+        return selic
 
     def getHistory(self, code, start='2018-01-01'):
         return self.df.loc[start:][code]
@@ -578,8 +584,9 @@ class PerformanceBlueprint:
             self.ibov            = indexHistory.iloc[-1]/indexHistory.iloc[0] - 1
             indexHistory         = self.pcRdr.getIndexHistory('S&P500', self.date)
             self.sp500           = indexHistory.iloc[-1]/indexHistory.iloc[0] - 1
+            self.selic           = self.pcRdr.getIndexCurrentValue('selic', self.date)
             self.expense         = self.df.loc[self.df.OPERATION == "B",'FEE'].sum()
-            self.exchangeRatio   = self.pcRdr.getIndexCurrentValue('USD',self.date)
+            self.exchangeRatio   = self.pcRdr.getIndexCurrentValue('USD', self.date)
             return self
 
 #     -------------------------------------------------------------------------------------------------
