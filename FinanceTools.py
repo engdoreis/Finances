@@ -584,7 +584,11 @@ class PerformanceBlueprint:
             self.ibov            = indexHistory.iloc[-1]/indexHistory.iloc[0] - 1
             indexHistory         = self.pcRdr.getIndexHistory('S&P500', self.date)
             self.sp500           = indexHistory.iloc[-1]/indexHistory.iloc[0] - 1
-            self.selic           = self.pcRdr.getIndexCurrentValue('selic', self.date)
+
+            indexHistory         = self.pcRdr.getIndexHistory('selic', self.date)
+            self.selic           = indexHistory.iloc[-1]
+            self.cum_cdb         = indexHistory.apply(lambda y: ((y + 1) ** (1 / 365))).cumprod().iloc[-1] - 1
+
             self.expense         = self.df.loc[self.df.OPERATION == "B",'FEE'].sum()
             self.exchangeRatio   = self.pcRdr.getIndexCurrentValue('USD', self.date)
             return self

@@ -331,19 +331,15 @@ class Wallet():
         for i, month in enumerate(monthList):
             p = PerformanceBlueprint(self.prcReader, self.df, month).calc()
             performanceList.append([dt.datetime.strptime(p.date, '%Y-%m-%d'), p.equity, p.cost, p.realizedProfit, p.div, p.paperProfit, \
-                                   p.profit, p.profitRate, p.expense, p.ibov, p.sp500, p.selic])
+                                   p.profit, p.profitRate, p.expense, p.ibov, p.sp500, p.cum_cdb])
 
         histProfDF = pd.DataFrame(performanceList,\
-                     columns=['Date', 'Equity', 'Cost', 'Profit', 'Div', 'paperProfit', 'TotalProfit', '%Profit', 'Expense', '%IBOV', '%SP500', 'SELIC'])
-
-        period_days = 365 / (15 if frequency == 'SM' else 7)
-        histProfDF['SELIC'] = histProfDF['SELIC'].apply(lambda y: ((y + 1) ** (1 / period_days)))
-        histProfDF['SELIC'] = histProfDF['SELIC'].cumprod() - 1
+                     columns=['Date', 'Equity', 'Cost', 'Profit', 'Div', 'paperProfit', 'TotalProfit', '%Profit', 'Expense', '%IBOV', '%SP500', 'CDB'])
 
         if (period.lower() != "all"):
-            histProfDF['%IBOV']   -= histProfDF.iloc[0,'%IBOV']
-            histProfDF['%SP500']  -= histProfDF.iloc[0,'%SP500']
-            histProfDF['%Profit'] -= histProfDF.iloc[0,'%Profit']
+            histProfDF['%IBOV']   -= histProfDF.iloc[1,'%IBOV']
+            histProfDF['%SP500']  -= histProfDF.iloc[1,'%SP500']
+            histProfDF['%Profit'] -= histProfDF.iloc[1,'%Profit']
         self.historic_profit_df = histProfDF
         self.history_df_frequency = frequency
 
@@ -361,7 +357,7 @@ class Wallet():
         ax[0].plot(histProfDF.Date, histProfDF['%IBOV'], label='ibovespa')
         ax[0].plot(histProfDF.Date, histProfDF['%SP500'], label='S&P500')
         ax[0].plot(histProfDF.Date, histProfDF['%Profit'], label='Wallet')
-        ax[0].plot(histProfDF.Date, histProfDF['SELIC'], label='CDB')
+        ax[0].plot(histProfDF.Date, histProfDF['CDB'], label='CDB')
 
         minTick = min(histProfDF['%IBOV'].min(), histProfDF['%SP500'].min(), histProfDF['%Profit'].min())
         maxTick = max(histProfDF['%IBOV'].max(), histProfDF['%SP500'].max(), histProfDF['%Profit'].max())
