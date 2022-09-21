@@ -330,10 +330,12 @@ class Wallet():
 
         for i, month in enumerate(monthList):
             p = PerformanceBlueprint(self.prcReader, self.df, month).calc()
-            performanceList.append([p.date, p.equity, p.cost, p.realizedProfit, p.div, p.paperProfit, p.profit, p.profitRate, p.expense, p.ibov, p.sp500, p.selic])
+            performanceList.append([dt.datetime.strptime(p.date, '%Y-%m-%d'), p.equity, p.cost, p.realizedProfit, p.div, p.paperProfit, \
+                                   p.profit, p.profitRate, p.expense, p.ibov, p.sp500, p.selic])
 
-        histProfDF = pd.DataFrame(performanceList, columns=['Date', 'Equity', 'Cost', 'Profit', 'Div', 'paperProfit', 'TotalProfit', '%Profit', 'Expense', '%IBOV', '%SP500', 'SELIC'])
-        histProfDF['Date'] = pd.to_datetime(histProfDF.Date, format='%Y/%m/%d')
+        histProfDF = pd.DataFrame(performanceList,\
+                     columns=['Date', 'Equity', 'Cost', 'Profit', 'Div', 'paperProfit', 'TotalProfit', '%Profit', 'Expense', '%IBOV', '%SP500', 'SELIC'])
+
         period_days = 365 / (15 if frequency == 'SM' else 7)
         histProfDF['SELIC'] = histProfDF['SELIC'].apply(lambda y: ((y + 1) ** (1 / period_days)))
         histProfDF['SELIC'] = histProfDF['SELIC'].cumprod() - 1
