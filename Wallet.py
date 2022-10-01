@@ -218,6 +218,8 @@ class Wallet():
 
         rl = self.df[self.df.OPERATION == 'S'][['DATE', 'SYMBOL', 'TYPE', 'AMOUNT', 'Profit', 'DayTrade', 'Month', 'Year']]
         rl1 = rl[['DATE', 'SYMBOL', 'TYPE', 'AMOUNT', 'Profit', 'DayTrade']].copy(deep=True)
+        rl1['DATE'] = rl1['DATE'].apply(lambda x: x.strftime('%Y-%m-%d'))
+        rl1 = rl1.groupby(['DATE', 'SYMBOL', 'TYPE']).sum().reset_index()
         rl1.loc['Total', 'Profit'] = rl['Profit'].sum()
         rl1['AMOUNT'] = rl1['AMOUNT'].abs()
         rl1.loc['Total', 'AMOUNT'] = 0
@@ -296,8 +298,9 @@ class Wallet():
             prov_month.loc['Total', self.currency] = prov_month[self.currency].sum()
             prov_month['MONTH'] = date.strftime("%B")
             self.prov_month = pd.concat([self.prov_month, prov_month.fillna(' ').reset_index(drop=True)])
-        self.prov_month.set_index(['MONTH', 'SYMBOL'], inplace=True)
-
+        
+        if not self.prov_month.empty:
+            self.prov_month.set_index(['MONTH', 'SYMBOL'], inplace=True)
 
         prov = self.df[self.df['OPERATION'].isin('D1 R1 JCP1 A1'.split())]
         if prov.empty:
