@@ -52,7 +52,7 @@ class Taxation:
     def SwingTrade(self, stockType):
         swingTrade = pd.DataFrame(columns=['Month','Profit'])
         #Filter by stockType and get the year list
-        typeDF = self.df[(self.df['DayTrade'] == 0) & (self.df['TYPE'] == stockType) & (self.df['OPERATION'].isin(['S']))]
+        typeDF = self.df[(self.df['DayTrade'] == 0) & (self.df['TYPE'] == stockType) & (self.df['OPERATION'].isin(['S']))].copy(deep=True)
         typeDF['AMOUNT'] = typeDF['AMOUNT'].abs() 
         years = typeDF.Year.unique()
         for year in years: 
