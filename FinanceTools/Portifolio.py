@@ -1,12 +1,12 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 from .Color import Color
 from .TableAccumulator import TableAccumulator
 
 
 class Portifolio:
-    def __init__(self, priceReader, dFrame, recommended=None, currency="$"):
+    def __init__(self, price_reader, split_reader, date, dFrame, recommended=None, currency="$"):
         self.currency = currency
         self.dtframe = dFrame.groupby(["SYMBOL"]).apply(lambda x: x.tail(1))
 
@@ -21,7 +21,14 @@ class Portifolio:
         self.dtframe.reset_index(drop=True, inplace=True)
 
         self.dtframe = self.dtframe[self.dtframe["SYMBOL"] != "CASH"]
-        self.dtframe["PRICE"] = self.dtframe.apply(priceReader.fillCurrentValue, axis=1)["PRICE"]
+
+        def fillCurrentValue(pr, sr, date, row):
+            return pr.getCurrentValue(row["SYMBOL"], date) * sr.get_accumulated(row["SYMBOL"], date)
+
+        self.dtframe["PRICE"] = self.dtframe.apply(
+            lambda row: fillCurrentValue(price_reader, split_reader, date, row), axis=1
+        )
+
         self.dtframe["PRICE"] = self.dtframe["PRICE"].fillna(self.dtframe["PM"])
         self.dtframe["MKT_VALUE"] = self.dtframe["PRICE"] * self.dtframe["QUANTITY"]
 

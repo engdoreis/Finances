@@ -15,7 +15,6 @@ class PriceReader:
 
     def __post_init__(self):
         self.start_date = self.start_date.strftime("%Y-%m-%d")
-        self.fillDate = dt.datetime.today().strftime("%m-%d-%Y")
         self.df = pd.DataFrame(columns=["Date"])
 
     def load(self):
@@ -38,13 +37,6 @@ class PriceReader:
         self.brlIndex.rename(columns={"^BVSP": "IBOV", "^GSPC": "S&P500", "BRLUSD=X": "USD"}, inplace=True)
         self.brlIndex = self.brlIndex.merge(self.read_br_selic(self.start_date), on="Date")
         self.brlIndex = self.brlIndex.set_index("Date")
-
-    def setFillDate(self, date):
-        self.fillDate = date
-
-    def fillCurrentValue(self, row):
-        row["PRICE"] = self.getCurrentValue(row["SYMBOL"], self.fillDate)
-        return row
 
     def readData(self, code, start_date="2018-01-01"):
         s = ""

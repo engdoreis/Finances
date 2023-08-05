@@ -7,7 +7,7 @@ from collections import namedtuple
 import numpy as np
 import pandas as pd
 
-from BroakerParser import ReadTDStatement
+from BroakerParser import ClearDivStatement, ReadOrders, ReadTDStatement
 from FinanceTools import (
     Color,
     DividendReader,
@@ -240,6 +240,7 @@ class Wallet:
         # Calc the average price and rename the columns names
         self.df = self.df.sort_values(["PAYDATE", "OPERATION"], ascending=[True, False])
         self.df = self.df.apply(TableAccumulator(self.prcReader).Cash, axis=1).reset_index(drop=True)
+
         self.df = (
             self.df.groupby(["SYMBOL"], group_keys=False)
             .apply(TableAccumulator(self.prcReader).ByGroup)
@@ -299,11 +300,14 @@ class Wallet:
             self.realized_profit_pivot_fii = Pivot(rl[rl["TYPE"] == "FII"])
 
     def compute_portifolio(self):
-        self.portifolio_df = Portifolio(self.prcReader, self.df, self.recomended_wallet, self.currency).show()
+        today = dt.datetime.today().strftime("%Y-%m-%d")
+        self.portifolio_df = Portifolio(
+            self.prcReader, self.splReader, today, self.df, self.recomended_wallet, self.currency
+        ).show()
 
     def compute_blueprint(self):
         p = PerformanceBlueprint(
-            self.prcReader, self.df, dt.datetime.today().strftime("%Y-%m-%d"), currency=self.currency
+            self.prcReader, self.splReader, self.df, dt.datetime.today().strftime("%Y-%m-%d"), currency=self.currency
         )
         self.blueprint_df = PerformanceViewer(p.calc()).show()
 
@@ -396,7 +400,7 @@ class Wallet:
             performanceList.append([startPlot - pd.DateOffset(weeks=2), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
 
         for i, month in enumerate(monthList):
-            p = PerformanceBlueprint(self.prcReader, self.df, month).calc()
+            p = PerformanceBlueprint(self.prcReader, self.splReader, self.df, month).calc()
             performanceList.append(
                 [
                     dt.datetime.strptime(p.date, "%Y-%m-%d"),

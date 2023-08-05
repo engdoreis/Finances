@@ -1,4 +1,5 @@
 import pandas as pd
+import yfinance as yf
 
 from .StockInfoCache import StockInfoCache
 
@@ -28,6 +29,10 @@ class SplitsReader:
     def getPeriod(self, ticker, fromDate, toDate):
         filtered = self.df[self.df["SYMBOL"] == ticker].loc[fromDate:toDate]
         return filtered[["SYMBOL", "QUANTITY"]]
+
+    def get_accumulated(self, ticker, start_date):
+        filtered = self.df[self.df["SYMBOL"] == ticker].loc[start_date:]
+        return filtered["QUANTITY"].prod() if len(filtered) > 0 else 1
 
     def loadData(self, tickerList):
         res = pd.DataFrame()

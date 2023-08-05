@@ -4,9 +4,9 @@ from .Portifolio import Portifolio
 
 
 class PerformanceBlueprint:
-    def __init__(self, priceReader, dataframe, date, currency="R$"):
+    def __init__(self, price_reader, split_reader, dataframe, date, currency="R$"):
         self.currency = currency
-        self.pcRdr = priceReader
+        self.price_reader = price_reader
         self.equity = (
             self.cost
         ) = (
@@ -17,12 +17,11 @@ class PerformanceBlueprint:
         self.date = date
         self.df = dataframe[(dataframe["DATE"] <= date)].copy(deep=True)
         if not self.df.empty:
-            priceReader.setFillDate(self.date)
-            self.pt = Portifolio(self.pcRdr, self.df)
+            self.portifolio = Portifolio(self.price_reader, split_reader, date, self.df)
 
     def calc(self):
         if not self.df.empty:
-            ptf = self.pt.dtframe
+            ptf = self.portifolio.dtframe
             self.equity = (ptf["PRICE"] * ptf["QUANTITY"]).sum()
             self.cost = ptf["COST"].sum()
             self.realizedProfit = self.df.loc[self.df.OPERATION == "S", "Profit"].sum()
@@ -32,15 +31,15 @@ class PerformanceBlueprint:
             self.paperProfit = self.equity - self.cost
             self.profit = self.equity - self.cost + self.realizedProfit + self.div
             self.profitRate = self.profit / self.cost
-            indexHistory = self.pcRdr.getIndexHistory("IBOV", self.date)
+            indexHistory = self.price_reader.getIndexHistory("IBOV", self.date)
             self.ibov = indexHistory.iloc[-1] / indexHistory.iloc[0] - 1
-            indexHistory = self.pcRdr.getIndexHistory("S&P500", self.date)
+            indexHistory = self.price_reader.getIndexHistory("S&P500", self.date)
             self.sp500 = indexHistory.iloc[-1] / indexHistory.iloc[0] - 1
 
-            indexHistory = self.pcRdr.getIndexHistory("selic", self.date)
+            indexHistory = self.price_reader.getIndexHistory("selic", self.date)
             self.selic = indexHistory.iloc[-1]
             self.cum_cdb = indexHistory.apply(lambda y: ((y + 1) ** (1 / 365))).cumprod().iloc[-1] - 1
 
             self.expense = self.df.loc[self.df.OPERATION == "B", "FEE"].sum()
-            self.exchangeRatio = self.pcRdr.getIndexCurrentValue("USD", self.date)
+            self.exchangeRatio = self.price_reader.getIndexCurrentValue("USD", self.date)
             return self

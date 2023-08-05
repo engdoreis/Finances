@@ -8,11 +8,8 @@ class TableAccumulator:
     def __init__(self, pcr=None):
         self.pcr = pcr
 
-    def get_currency_rate(self, date):
-        currency_rate = 1
-        if not self.pcr == None:
-            currency_rate = self.pcr.getIndexCurrentValue("USD", date)
-        return currency_rate
+    def get_currency_rate(self, date: str):
+        return self.pcr.getIndexCurrentValue("USD", date) if self.pcr else 1
 
     def ByRow(self, row):
         total = row.loc["AMOUNT"]
@@ -95,7 +92,6 @@ class TableAccumulator:
         elif (stType in ["D1", "A1", "R1", "JCP1", "T1", "I1", "CF"]) or (
             stType in ["D", "A", "R", "JCP", "T"] and row["acum_qty"] > 0
         ):
-            # self.acumProv += amount
             self.cash += amount
 
         row["CASH"] = round(self.cash, 6)
