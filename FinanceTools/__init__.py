@@ -1,12 +1,11 @@
 from .Acumulator import *
 from .ADVFN_Page import *
-from .BroakerParser import *
 from .Caching import *
+from .Color import *
 from .CompanyListReader import *
 from .DataFrameMerger import *
 from .DividendReader import *
 from .Fundamentus_Page import *
-from .OrdersReader import *
 from .PerformanceBlueprint import *
 from .PerformanceViewer import *
 from .Portifolio import *
@@ -16,8 +15,6 @@ from .SplitsReader import *
 from .StockInfoCache import *
 from .TableAccumulator import *
 from .YfinanceReader import *
-from .Color import *
-
 
 if __name__ == "__main__":
 

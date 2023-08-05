@@ -1,13 +1,16 @@
-import os, sys
+import os
+import sys
+from glob import glob
+from multiprocessing import Process
 from shutil import rmtree
+from threading import Thread
+
+import numpy as np
 import pandas as pd
 import pdfplumber
-import numpy as np
-from multiprocessing import Process
-from threading import Thread
-from glob import glob
+
+from BroakerParser import *
 from FinanceTools import *
-from FinanceTools.BroakerParser import *
 
 
 class OrderOrganizer:

@@ -1,4 +1,13 @@
-from IRPF_Tools import *
+import datetime as dt
+import sys
+import threading
+import time
+from collections import namedtuple
+
+import numpy as np
+import pandas as pd
+
+from BroakerParser import ReadTDStatement
 from FinanceTools import (
     Color,
     DividendReader,
@@ -11,16 +20,7 @@ from FinanceTools import (
     TableAccumulator,
     YfinanceReader,
 )
-import numpy as np
-from collections import namedtuple
-import time
-import threading
-import datetime as dt
-import sys
-from operator import contains
-
-import pandas as pd
-from scipy.misc import derivative
+from IRPF_Tools import *
 
 pd.options.display.float_format = "${:,.2f}".format
 
@@ -104,7 +104,7 @@ class Wallet:
 
     def load_statement(self):
         if self.market == "br":
-            st = Clear_DivStatement(
+            st = ClearDivStatement(
                 self.clear_config.dividends_statement_path, self.clear_config.dividends_statement_path, "divTable"
             )
             st.process()
