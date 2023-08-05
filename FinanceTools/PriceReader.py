@@ -1,8 +1,10 @@
-from dataclasses import dataclass
-import pandas as pd
-import numpy as np
 import datetime as dt
+from dataclasses import dataclass
+
+import numpy as np
+import pandas as pd
 import yfinance as yf
+from bcb import sgs
 
 
 @dataclass
@@ -65,8 +67,6 @@ class PriceReader:
         return dfs
 
     def read_br_selic(self, start_date="2018-01-01"):
-        from bcb import sgs
-
         try:
             selic = sgs.get({"selic": 432}, start=start_date)
             selic["selic"] /= 100

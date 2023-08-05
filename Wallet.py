@@ -1,28 +1,29 @@
-from operator import contains
+from IRPF_Tools import *
+from FinanceTools import (
+    Color,
+    DividendReader,
+    PerformanceBlueprint,
+    PerformanceViewer,
+    Portifolio,
+    PriceReader,
+    Profit,
+    SplitsReader,
+    TableAccumulator,
+    YfinanceReader,
+)
+import numpy as np
+from collections import namedtuple
+import time
+import threading
+import datetime as dt
 import sys
+from operator import contains
 
 import pandas as pd
 from scipy.misc import derivative
 
 pd.options.display.float_format = "${:,.2f}".format
-import datetime as dt
-import numpy as np
-import time
-import threading
-from collections import namedtuple
 
-from FinanceTools import DividendReader
-from FinanceTools import PerformanceBlueprint
-from FinanceTools import PerformanceViewer
-from FinanceTools import Portifolio
-from FinanceTools import PriceReader
-from FinanceTools import Profit
-from FinanceTools import SplitsReader
-from FinanceTools import TableAccumulator
-from FinanceTools import YfinanceReader
-from FinanceTools import Color
-
-from IRPF_Tools import *
 
 currency_market_map = {"us": "$", "br": "R$", "uk": "£"}
 
@@ -444,7 +445,8 @@ class Wallet:
 
         histProfDF = self.historic_profit_df
 
-        width = 2 if self.history_df_frequency == "W" else 5  # the width of the bars: can also be len(x) sequence
+        # the width of the bars: can also be len(x) sequence
+        width = 2 if self.history_df_frequency == "W" else 5
         shift = pd.Timedelta(width / 2, unit="d")
         fig, ax = plt.subplots(2, 1, figsize=(32, 9), sharex=True, gridspec_kw={"height_ratios": [3, 1]})
         fig.tight_layout()
@@ -495,10 +497,6 @@ class Wallet:
         self.compute_blueprint()
         self.compute_dividends()
         self.compute_history_blueprint()
-
-        # self.df[self.df['SYMBOL'] == 'ITUB3']
-        # Clear operation costs befere 2019
-        # self.df.FEE.update(self.df.apply(clear2018Cost, axis=1))
 
     def export_to_excel(self, outfile):
         # Create a Pandas Excel writer using XlsxWriter as the engine.
