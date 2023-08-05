@@ -1,5 +1,4 @@
 import os, sys
-import re
 from shutil import rmtree
 import pandas as pd
 import pdfplumber
@@ -7,9 +6,8 @@ import numpy as np
 from multiprocessing import Process
 from threading import Thread
 from glob import glob
-import time
 from FinanceTools import *
-from BroakerParser import *
+from FinanceTools.BroakerParser import *
 
 
 class OrderOrganizer:

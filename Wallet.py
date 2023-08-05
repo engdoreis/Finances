@@ -10,10 +10,18 @@ import numpy as np
 import time
 import threading
 from collections import namedtuple
-import matplotlib.pyplot as plt
-import ipywidgets as widgets
-from FinanceTools import *
-from OrdersReader import *
+
+from FinanceTools import DividendReader
+from FinanceTools import PerformanceBlueprint
+from FinanceTools import PerformanceViewer
+from FinanceTools import Portifolio
+from FinanceTools import PriceReader
+from FinanceTools import Profit
+from FinanceTools import SplitsReader
+from FinanceTools import TableAccumulator
+from FinanceTools import YfinanceReader
+from FinanceTools import Color
+
 from IRPF_Tools import *
 
 currency_market_map = {"us": "$", "br": "R$", "uk": "£"}
@@ -256,14 +264,14 @@ class Wallet:
         rl1["AMOUNT"] = rl1["AMOUNT"].abs()
         rl1.loc["Total", "AMOUNT"] = 0
         rl1 = rl1.fillna(" ").reset_index(drop=True)
-        self.realized_profit_df = rl1.style.applymap(color_negative_red, subset=["Profit", "AMOUNT"]).format(
+        self.realized_profit_df = rl1.style.applymap(Color().color_negative_red, subset=["Profit", "AMOUNT"]).format(
             {"AMOUNT": f"{self.currency} {{:,.2f}}", "Profit": f"{self.currency} {{:,.2f}}", "DayTrade": "{}"}
         )
 
         rl1 = rl.groupby("SYMBOL").Profit.sum().reset_index()
         rl1.loc["Total", "Profit"] = rl1["Profit"].sum()
         rl1 = rl1.fillna(" ").reset_index(drop=True)
-        self.realized_profit_by_symbol_df = rl1.style.applymap(color_negative_red, subset=["Profit"]).format(
+        self.realized_profit_by_symbol_df = rl1.style.applymap(Color().color_negative_red, subset=["Profit"]).format(
             {"Profit": f"{self.currency} {{:,.2f}}"}
         )
 
@@ -282,7 +290,7 @@ class Wallet:
             sorted_m = sorted(pvt.columns[:-1], key=lambda month: dt.datetime.strptime(month, "%B"))
             sorted_m.append(pvt.columns[-1])
             pvt = pvt.reindex(sorted_m, axis=1)
-            return pvt.style.applymap(color_negative_red).format("{:,.2f}")
+            return pvt.style.applymap(Color().color_negative_red).format("{:,.2f}")
 
         if not rl.empty:
             self.realized_profit_pivot_all = Pivot(rl)
@@ -360,7 +368,9 @@ class Wallet:
             sorted_m = sorted(pvt.columns[:-1], key=lambda month: dt.datetime.strptime(month, "%B"))
             sorted_m.append(pvt.columns[-1])
             self.pvt_div_table = (
-                pvt.reindex(sorted_m, axis=1).style.applymap(color_negative_red).format(f"{self.currency} {{:,.2f}}")
+                pvt.reindex(sorted_m, axis=1)
+                .style.applymap(Color().color_negative_red)
+                .format(f"{self.currency} {{:,.2f}}")
             )
         else:
             self.pvt_div_table = pd.DataFrame()

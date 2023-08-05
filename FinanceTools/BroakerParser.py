@@ -1,9 +1,8 @@
 import re
-from unicodedata import decimal
 import pdfplumber
 import numpy as np
-from collections import namedtuple
 import pandas as pd
+from collections import namedtuple
 from glob import glob
 import logging
 

@@ -1,10 +1,10 @@
 import json
 from datetime import datetime
 import pandas as pd
-from collections import namedtuple
-from FinanceTools import *
 import numpy as np
 import sys
+from collections import namedtuple
+from FinanceTools import *
 
 
 class Simulator:

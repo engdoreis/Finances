@@ -1,10 +1,8 @@
-import os.path
 from unicodedata import decimal
-from pandas_datareader import data as web
 import pandas as pd
 import datetime as dt
 import numpy as np
-from Caching import *
+from FinanceTools.Caching import *
 from FinanceTools import *
 import requests
 
