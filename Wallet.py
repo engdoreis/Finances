@@ -98,7 +98,7 @@ class Wallet:
         self.df.loc[self.df.OPERATION == "S", ["QUANTITY"]] *= -1
 
         # Get the oldest order date
-        self.startDate = self.df.iloc[0]["DATE"]
+        self.start_date = self.df.iloc[0]["DATE"]
         self.df["AMOUNT"] = self.df["PRICE"] * self.df["QUANTITY"]
 
     def load_statement(self):
@@ -114,12 +114,12 @@ class Wallet:
     def load_external_data(self):
         start_time = time.time()
 
-        div_start_date = self.startDate
+        div_start_date = self.start_date
         if not self.divStatement.empty:
             div_start_date = self.divStatement.iloc[-1]["DATE"]
 
-        self.prcReader = PriceReader(self.brTickers + self.fiiTickers, self.usTickers, self.startDate)
-        self.splReader = SplitsReader(self.brTickers, self.usTickers, self.startDate)
+        self.prcReader = PriceReader(self.brTickers + self.fiiTickers, self.usTickers, self.start_date)
+        self.splReader = SplitsReader(self.brTickers, self.usTickers, self.start_date)
 
         if self.market == "br":
             self.divReader = DividendReader(self.brTickers, self.fiiTickers, None, div_start_date)
@@ -376,7 +376,7 @@ class Wallet:
             self.pvt_div_table = pd.DataFrame()
 
     def compute_history_blueprint(self, period="all"):
-        startPlot = self.startDate
+        startPlot = self.start_date
         frequency = "SM"
 
         if period.lower() != "all":

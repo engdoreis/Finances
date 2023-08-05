@@ -19,7 +19,7 @@ class YfinanceReader(DividendReader):
         res.reset_index(inplace=True)
         res.rename(columns={"Date": "DATE", "Dividends": "PRICE"}, inplace=True)
         res["PAYDATE"] = res["DATE"] = pd.to_datetime(res["DATE"], format="%Y/%m/%d").dt.tz_localize(None)
-        res = res[res["DATE"] >= self.startDate]
+        res = res[res["DATE"] >= self.start_date]
         # 30% tax
         res["TAX"] = res["PRICE"] * 0.3 * 0
         # print(res)

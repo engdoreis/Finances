@@ -1,9 +1,10 @@
-import pandas as pd
+from pandas import DataFrame
+from dataclasses import dataclass
 
 
+@dataclass
 class DataFrameMerger:
-    def __init__(self, df):
-        self.df = df
+    df: DataFrame
 
     def append(self, new, on):
         columns = self.df.columns.to_list()

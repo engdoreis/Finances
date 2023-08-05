@@ -3,8 +3,9 @@ import numpy as np
 
 
 class TableAccumulator:
+    cash = avr = brl_avr = acumQty = acumProv = 0
+
     def __init__(self, pcr=None):
-        self.cash = self.avr = self.brl_avr = self.acumQty = self.acumProv = 0
         self.pcr = pcr
 
     def get_currency_rate(self, date):

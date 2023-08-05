@@ -1,36 +1,40 @@
+from dataclasses import dataclass
 import pandas as pd
 import numpy as np
 import datetime as dt
 import yfinance as yf
 
 
+@dataclass
 class PriceReader:
-    def __init__(self, brTickerList, usTickerList, startDate="2018-01-01"):
-        self.brTickerList = brTickerList
-        self.usTickerList = usTickerList
-        self.startDate = startDate.strftime("%Y-%m-%d")
+    br_tickers: list
+    us_tickers: list
+    start_date: str = "2018-01-01"
+
+    def __post_init__(self):
+        self.start_date = self.start_date.strftime("%Y-%m-%d")
         self.fillDate = dt.datetime.today().strftime("%m-%d-%Y")
         self.df = pd.DataFrame(columns=["Date"])
 
     def load(self):
         # Read BR market data
-        if (self.brTickerList != None) and (len(self.brTickerList) > 0):
-            self.df = self.readData(self.brTickerList, self.startDate).reset_index()
+        if (self.br_tickers != None) and (len(self.br_tickers) > 0):
+            self.df = self.readData(self.br_tickers, self.start_date).reset_index()
             self.df.columns = self.df.columns.str.removesuffix(".SA")
 
         # Read US Market data
-        if (self.usTickerList != None) and (len(self.usTickerList) > 0):
+        if (self.us_tickers != None) and (len(self.us_tickers) > 0):
             self.df = self.df.merge(
-                self.readUSData(self.usTickerList, self.startDate).reset_index(), how="outer", on="Date"
+                self.readUSData(self.us_tickers, self.start_date).reset_index(), how="outer", on="Date"
             )
 
         self.df = self.df.set_index("Date").sort_index()
         # self.df.to_csv('debug.csv', sep='\t')
 
         indexList = ["^BVSP", "^GSPC", "BRLUSD=X"]
-        self.brlIndex = self.readUSData(indexList, self.startDate).reset_index()
+        self.brlIndex = self.readUSData(indexList, self.start_date).reset_index()
         self.brlIndex.rename(columns={"^BVSP": "IBOV", "^GSPC": "S&P500", "BRLUSD=X": "USD"}, inplace=True)
-        self.brlIndex = self.brlIndex.merge(self.read_br_selic(self.startDate), on="Date")
+        self.brlIndex = self.brlIndex.merge(self.read_br_selic(self.start_date), on="Date")
         self.brlIndex = self.brlIndex.set_index("Date")
 
     def setFillDate(self, date):
@@ -40,31 +44,31 @@ class PriceReader:
         row["PRICE"] = self.getCurrentValue(row["SYMBOL"], self.fillDate)
         return row
 
-    def readData(self, code, startDate="2018-01-01"):
+    def readData(self, code, start_date="2018-01-01"):
         s = ""
         for c in code:
             s += c + ".SA "
 
         tks = yf.Tickers(s)
-        dfs = tks.history(start=startDate, timeout=1000)[["Close"]]
+        dfs = tks.history(start=start_date, timeout=1000)[["Close"]]
         dfs.columns = dfs.columns.droplevel()
         return dfs
 
-    def readUSData(self, code, startDate="2018-01-01"):
+    def readUSData(self, code, start_date="2018-01-01"):
         s = ""
         for c in code:
             s += c + " "
 
         tks = yf.Tickers(s)
-        dfs = tks.history(start=startDate)[["Close"]]
+        dfs = tks.history(start=start_date)[["Close"]]
         dfs.columns = dfs.columns.droplevel()
         return dfs
 
-    def read_br_selic(self, startDate="2018-01-01"):
+    def read_br_selic(self, start_date="2018-01-01"):
         from bcb import sgs
 
         try:
-            selic = sgs.get({"selic": 432}, start=startDate)
+            selic = sgs.get({"selic": 432}, start=start_date)
             selic["selic"] /= 100
             return selic
         except:

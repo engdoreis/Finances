@@ -3,8 +3,7 @@ import pandas as pd
 
 
 class Profit:
-    def __init__(self):
-        self.pm = self.amount = 0
+    pm = amount = 0
 
     def DayTrade(self, row):
         profit = 0

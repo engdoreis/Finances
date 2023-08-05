@@ -1,7 +1,11 @@
-# Class to calculate the average price by Stock group
+from dataclasses import dataclass
+
+""" Class to calculate the average price by Stock group"""
+
+
+@dataclass
 class Acumulator:
-    def __init__(self):
-        self.acumulated = 0
+    acumulated: int = 0
 
     def calcLoss(self, row):
         acumulated = self.acumulated

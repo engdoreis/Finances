@@ -1,30 +1,34 @@
 import pandas as pd
 import numpy as np
+from dataclasses import dataclass
 
 from .StockInfoCache import StockInfoCache
 from .Fundamentus_Page import Fundamentus_Page
 
 
+@dataclass
 class DividendReader:
-    def __init__(self, brTickers, fiiTickers, usTickers, startDate="2018-01-01", cache="debug/cache_dividends.tsv"):
-        self.brTickerList = brTickers
-        self.usTickerList = usTickers
-        self.fiiList = fiiTickers
-        self.startDate = startDate
+    br_tickers: list
+    us_tickers: list
+    fii_tickers: list
+    start_date: str = "2018-01-01"
+    cache_file: str = "debug/cache_dividends.tsv"
+
+    def __post_init__(self):
         self.df = pd.DataFrame(columns=["SYMBOL", "PRICE", "PAYDATE", "OPERATION"])
-        self.cache = StockInfoCache(cache)
+        self.cache = StockInfoCache(self.cache_file)
 
     def load(self):
         if not self.cache.is_updated():
-            if self.brTickerList != None and len(self.brTickerList) > 0:
-                self.df = self.loadData(self.brTickerList, type="ação")
+            if self.br_tickers != None and len(self.br_tickers) > 0:
+                self.df = self.loadData(self.br_tickers, type="ação")
 
-            if self.fiiList != None and len(self.fiiList) > 0:
-                tmp = self.loadData(self.fiiList, "fii")
+            if self.fii_tickers != None and len(self.fii_tickers) > 0:
+                tmp = self.loadData(self.fii_tickers, "fii")
                 self.df = tmp if self.df.empty else pd.concat([self.df, tmp])
 
-            if self.usTickerList != None and len(self.usTickerList) > 0:
-                tmp = self.loadData(self.usTickerList, "stock")
+            if self.us_tickers != None and len(self.us_tickers) > 0:
+                tmp = self.loadData(self.us_tickers, "stock")
                 self.df = tmp if self.df.empty else pd.concat([self.df, tmp])
 
             self.df = self.cache.merge(self.df, sortby=["DATE", "SYMBOL"], on=["SYMBOL", "DATE", "OPERATION"])
@@ -61,7 +65,7 @@ class DividendReader:
 
             tb = pd.concat([tb, rawTable])
         # print(tb)
-        return tb[tb["DATE"] >= self.startDate]
+        return tb[tb["DATE"] >= self.start_date]
 
     def getPeriod(self, paper, fromDate, toDate):
         filtered = self.df[self.df["SYMBOL"] == paper].loc[fromDate:toDate]
