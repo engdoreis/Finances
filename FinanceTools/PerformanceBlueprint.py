@@ -1,6 +1,6 @@
 import pandas as pd
 
-from .Portifolio import Portifolio
+from .Portfolio import Portfolio
 
 
 class PerformanceBlueprint:
@@ -12,11 +12,11 @@ class PerformanceBlueprint:
         self.date = date
         self.df = dataframe[(dataframe["DATE"] <= date)].copy(deep=True)
         if not self.df.empty:
-            self.portifolio = Portifolio(self.price_reader, split_reader, date, self.df)
+            self.portfolio = Portfolio(self.price_reader, split_reader, date, self.df)
 
     def calc(self):
         if not self.df.empty:
-            ptf = self.portifolio.dtframe
+            ptf = self.portfolio.dtframe
             self.equity = (ptf["PRICE"] * ptf["QUANTITY"]).sum()
             self.cost = ptf["COST"].sum()
             self.realizedProfit = self.df.loc[self.df.OPERATION == "S", "Profit"].sum()

@@ -8,7 +8,7 @@ from .DividendReader import *
 from .Fundamentus_Page import *
 from .PerformanceBlueprint import *
 from .PerformanceViewer import *
-from .Portifolio import *
+from .Portfolio import *
 from .PriceReader import *
 from .Profit import *
 from .SplitsReader import *

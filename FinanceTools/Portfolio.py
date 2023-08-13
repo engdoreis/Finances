@@ -5,7 +5,7 @@ from .Color import Color
 from .TableAccumulator import TableAccumulator
 
 
-class Portifolio:
+class Portfolio:
     def __init__(self, price_reader, split_reader, date, dFrame, recommended=None, currency="$"):
         self.currency = currency
         self.dtframe = dFrame.groupby(["SYMBOL"]).apply(lambda x: x.tail(1))

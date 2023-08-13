@@ -12,7 +12,7 @@ from FinanceTools import (
     DividendReader,
     PerformanceBlueprint,
     PerformanceViewer,
-    Portifolio,
+    Portfolio,
     PriceReader,
     Profit,
     SplitsReader,
@@ -328,9 +328,9 @@ class Wallet:
             self.realized_profit_pivot_stock = Pivot(rl[rl["TYPE"] != "FII"])
             self.realized_profit_pivot_fii = Pivot(rl[rl["TYPE"] == "FII"])
 
-    def compute_portifolio(self):
+    def compute_portfolio(self):
         today = dt.datetime.today().strftime("%Y-%m-%d")
-        self.portifolio_df = Portifolio(
+        self.portfolio_df = Portfolio(
             self.prcReader, self.splReader, today, self.df, self.recommended_wallet, self.currency.symbol
         ).show()
 
@@ -510,7 +510,7 @@ class Wallet:
         self.merge_external_data()
         self.compute_average_price()
         self.compute_realized_profit()
-        self.compute_portifolio()
+        self.compute_portfolio()
         self.compute_blueprint()
         self.compute_dividends()
         self.compute_history_blueprint()
@@ -519,7 +519,7 @@ class Wallet:
         # Create a Pandas Excel writer using XlsxWriter as the engine.
         writer = pd.ExcelWriter(outfile, engine="xlsxwriter")
         self.blueprint_df.to_excel(writer, sheet_name="blueprint")
-        self.portifolio_df.to_excel(writer, sheet_name="portifolio")
+        self.portfolio_df.to_excel(writer, sheet_name="portfolio")
 
         self.realized_profit_pivot_all.to_excel(writer, sheet_name="realized_profit")
         index = len(self.realized_profit_pivot_all.index) + 2
