@@ -5,6 +5,7 @@ from .DividendReader import DividendReader
 # 30% tax
 tax_rate = 0.3
 
+
 class YfinanceReader(DividendReader):
     def loadData(self, paperList, type=None):
         res = pd.DataFrame()

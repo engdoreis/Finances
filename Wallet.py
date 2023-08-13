@@ -2,12 +2,11 @@ import datetime as dt
 import sys
 import threading
 import time
-from collections import namedtuple
 
 import numpy as np
 import pandas as pd
 
-from BroakerParser import ClearDivStatement, ReadOrders, TDAmeritrade
+from BroakerParser import ClearDivStatement, ReadOrders, TDAmeritrade, Trading212
 from FinanceTools import (
     Color,
     DividendReader,
@@ -24,8 +23,20 @@ from IRPF_Tools import *
 
 pd.options.display.float_format = "${:,.2f}".format
 
+@dataclass
+class Currency:
+    name: str
+    symbol:str
 
-currency_market_map = {"us": "$", "br": "R$", "uk": "£"}
+currency_market_map = {"tdameritrade": Currency("USD", "$"), "clear": Currency("BRL", "R$"), "trading212": Currency("GBP", "£")}
+
+
+@dataclass
+class Config:
+    order_dir: str
+    dataframe_path: str
+    dividends_statement_path: str
+    recommended_wallet: str
 
 
 class Wallet:
@@ -33,18 +44,30 @@ class Wallet:
         self.work_dir = work_dir
         if work_dir[-1] != "/":
             self.work_dir += "/"
-        self.td_config = namedtuple("config", "order_dir dataframe_path dividends_statement_path recommended_wallet")
-        self.clear_config = namedtuple("config", "order_dir dataframe_path dividends_statement_path recommended_wallet")
 
-        self.td_config.order_dir = self.work_dir + "Notas_TD"
-        self.td_config.dividends_statement_path = self.work_dir + "Notas_TD"
-        self.td_config.dataframe_path = self.work_dir + "TD.csv"
-        self.td_config.recommended_wallet = self.td_config.order_dir + "/global_wallet.json"
+        order_dir = self.work_dir + "Notas_TD"
+        self.td_config = Config(
+            order_dir=order_dir,
+            dividends_statement_path=self.work_dir + "Notas_TD",
+            dataframe_path=self.work_dir + "TD.csv",
+            recommended_wallet=order_dir + "/global_wallet.json",
+        )
 
-        self.clear_config.order_dir = self.work_dir + "Notas_Clear"
-        self.clear_config.dividends_statement_path = self.work_dir + "Notas_Clear/Statements"
-        self.clear_config.dataframe_path = self.work_dir + "operations.csv"
-        self.clear_config.recommended_wallet = self.clear_config.order_dir + "/iv_wallet.json"
+        order_dir = self.work_dir + "Notas_Clear"
+        self.clear_config = Config(
+            order_dir=order_dir,
+            dividends_statement_path=self.work_dir + "Notas_Clear/Statements",
+            dataframe_path=self.work_dir + "operations.csv",
+            recommended_wallet=order_dir + "/iv_wallet.json",
+        )
+
+        order_dir = self.work_dir + "Notas_T212"
+        self.t212_config = Config(
+            order_dir=order_dir,
+            dividends_statement_path=self.work_dir + "Notas_T212",
+            dataframe_path=self.work_dir + "T212.csv",
+            recommended_wallet=order_dir + "/global_wallet.json",
+        )
         try:
             os.mkdir("debug")
         except:
@@ -57,13 +80,17 @@ class Wallet:
         df.to_csv(file_, index=False)
 
     def open_dataframe(self):
-        if self.market == "br":
+        if self.broker == "clear":
             ReadOrders(self.clear_config.order_dir, self.clear_config.dataframe_path, "Clear")
             self.df = pd.read_csv(self.clear_config.dataframe_path)
-        else:
-            td = TDAmeritrade(self.td_config.dataframe_path)
-            td.read_statement(self.td_config.order_dir)
+        elif self.broker == "tdameritrade":
+            broaker = TDAmeritrade(self.td_config.dataframe_path)
+            broaker.read_statement(self.td_config.order_dir)
             self.df = pd.read_csv(self.td_config.dataframe_path)
+        elif self.broker == "trading212":
+            broaker = Trading212(self.t212_config.dataframe_path)
+            broaker.read_statement(self.t212_config.order_dir)
+            self.df = pd.read_csv(self.t212_config.dataframe_path)
 
         self.df = self.df.iloc[:, :7]
         self.df.columns = ["SYMBOL", "DATE", "PRICE", "QUANTITY", "OPERATION", "TYPE", "FEE"]
@@ -71,7 +98,7 @@ class Wallet:
         # drop empty lines
         self.df = self.df[self.df["DATE"].astype(bool)].dropna()
 
-        if self.market == "br":
+        if self.broker == "clear":
             self.brTickers = np.sort(self.df[self.df["TYPE"].isin(["Ação"])]["SYMBOL"].unique()).tolist()
             self.fiiTickers = np.sort(self.df[self.df["TYPE"] == "FII"]["SYMBOL"].unique()).tolist()
             self.usTickers = []
@@ -104,7 +131,7 @@ class Wallet:
         self.df["AMOUNT"] = self.df["PRICE"] * self.df["QUANTITY"]
 
     def load_statement(self):
-        if self.market == "br":
+        if self.broker == "clear":
             st = ClearDivStatement(
                 self.clear_config.dividends_statement_path, self.clear_config.dividends_statement_path, "divTable"
             )
@@ -123,7 +150,7 @@ class Wallet:
         self.prcReader = PriceReader(self.brTickers + self.fiiTickers, self.usTickers, self.start_date)
         self.splReader = SplitsReader(self.brTickers, self.usTickers, self.start_date)
 
-        if self.market == "br":
+        if self.broker == "clear":
             self.divReader = DividendReader(self.brTickers, self.fiiTickers, None, div_start_date)
         else:
             self.divReader = YfinanceReader(None, None, self.usTickers, div_start_date)
@@ -148,13 +175,13 @@ class Wallet:
     def load_recommended_wallet(self):
         import json
 
-        wallet_file = self.clear_config.recommended_wallet if self.market == "br" else self.td_config.recommended_wallet
+        wallet_file = self.clear_config.recommended_wallet if self.broker == "clear" else self.td_config.recommended_wallet
         self.recommended_wallet = None
         with open(wallet_file) as file:
             self.recommended_wallet = json.load(file)
 
     def merge_statement_data(self):
-        if self.market == "br":
+        if self.broker == "clear":
             self.df["PAYDATE"] = self.df["DATE"]
 
             def getType(symbol):
@@ -240,11 +267,12 @@ class Wallet:
 
         # Calc the average price and rename the columns names
         self.df = self.df.sort_values(["PAYDATE", "OPERATION"], ascending=[True, False])
-        self.df = self.df.apply(TableAccumulator(self.prcReader).Cash, axis=1).reset_index(drop=True)
+        tab_accum = TableAccumulator(self.prcReader, self.currency.name)
+        self.df = self.df.apply(tab_accum.Cash, axis=1).reset_index(drop=True)
 
         self.df = (
             self.df.groupby(["SYMBOL"], group_keys=False)
-            .apply(TableAccumulator(self.prcReader).ByGroup)
+            .apply(tab_accum.ByGroup)
             .reset_index(drop=True)
         )
 
@@ -254,7 +282,7 @@ class Wallet:
         tmp.reset_index(drop=True)
         self.df = tmp.groupby(["SYMBOL", "DATE"], group_keys=False).apply(profit.Trade).reset_index(drop=True)
         self.df.sort_values(["PAYDATE", "OPERATION"], ascending=[True, False]).to_csv(
-            f"debug/df_log_{self.market}.tsv", sep="\t"
+            f"debug/df_log_{self.broker}.tsv", sep="\t"
         )
 
         rl = self.df[self.df.OPERATION == "S"][
@@ -268,14 +296,14 @@ class Wallet:
         rl1.loc["Total", "AMOUNT"] = 0
         rl1 = rl1.fillna(" ").reset_index(drop=True)
         self.realized_profit_df = rl1.style.applymap(Color().color_negative_red, subset=["Profit", "AMOUNT"]).format(
-            {"AMOUNT": f"{self.currency} {{:,.2f}}", "Profit": f"{self.currency} {{:,.2f}}", "DayTrade": "{}"}
+            {"AMOUNT": f"{self.currency.symbol} {{:,.2f}}", "Profit": f"{self.currency.symbol} {{:,.2f}}", "DayTrade": "{}"}
         )
 
         rl1 = rl.groupby("SYMBOL").Profit.sum().reset_index()
         rl1.loc["Total", "Profit"] = rl1["Profit"].sum()
         rl1 = rl1.fillna(" ").reset_index(drop=True)
         self.realized_profit_by_symbol_df = rl1.style.applymap(Color().color_negative_red, subset=["Profit"]).format(
-            {"Profit": f"{self.currency} {{:,.2f}}"}
+            {"Profit": f"{self.currency.symbol} {{:,.2f}}"}
         )
 
         def Pivot(tb):
@@ -303,12 +331,12 @@ class Wallet:
     def compute_portifolio(self):
         today = dt.datetime.today().strftime("%Y-%m-%d")
         self.portifolio_df = Portifolio(
-            self.prcReader, self.splReader, today, self.df, self.recommended_wallet, self.currency
+            self.prcReader, self.splReader, today, self.df, self.recommended_wallet, self.currency.symbol
         ).show()
 
     def compute_blueprint(self):
         p = PerformanceBlueprint(
-            self.prcReader, self.splReader, self.df, dt.datetime.today().strftime("%Y-%m-%d"), currency=self.currency
+            self.prcReader, self.splReader, self.df, dt.datetime.today().strftime("%Y-%m-%d"), currency=self.currency.name
         )
         self.blueprint_df = PerformanceViewer(p.calc()).show()
 
@@ -331,11 +359,11 @@ class Wallet:
                 continue
 
             prov_month = prov_month[["PAYDATE", "SYMBOL", "AMOUNT"]]
-            prov_month.columns = ["DATE", "SYMBOL", self.currency]
-            prov_month = prov_month.groupby(["SYMBOL", "DATE"])[self.currency].sum().reset_index()
+            prov_month.columns = ["DATE", "SYMBOL", self.currency.name]
+            prov_month = prov_month.groupby(["SYMBOL", "DATE"])[self.currency.name].sum().reset_index()
             prov_month.sort_values("DATE", inplace=True)
             prov_month["DATE"] = prov_month["DATE"].apply(lambda x: x.strftime("%Y-%m-%d"))
-            prov_month.loc["Total", self.currency] = prov_month[self.currency].sum()
+            prov_month.loc["Total", self.currency.name] = prov_month[self.currency.name].sum()
             prov_month["MONTH"] = date.strftime("%B")
             self.prov_month = pd.concat([self.prov_month, prov_month.fillna(" ").reset_index(drop=True)])
 
@@ -361,7 +389,7 @@ class Wallet:
             self.pvt_div_table = (
                 pvt.reindex(sorted_m, axis=1)
                 .style.applymap(Color().color_negative_red)
-                .format(f"{self.currency} {{:,.2f}}")
+                .format(f"{self.currency.symbol} {{:,.2f}}")
             )
         else:
             self.pvt_div_table = pd.DataFrame()
@@ -460,7 +488,7 @@ class Wallet:
         ax[1].bar(barsDf.Date - shift, barsDf["Profit"], width, bottom=barsDf["Div"] + barsDf["Equity"], label="Profit")
         ax[1].bar(barsDf.Date + shift, barsDf["Cost"], width, label="Cost")
         ax[1].legend()
-        ax[1].set_ylabel(self.currency)
+        ax[1].set_ylabel(self.currency.symbol)
 
         plt.xticks(barsDf["Date"], rotation=90)
         plt.xlabel("Date")
@@ -469,10 +497,10 @@ class Wallet:
         self.history_chart = fig
         return plt.show()
 
-    def run(self, market="br"):
-        self.market = market
-        self.currency = currency_market_map[market]
-        pd.options.display.float_format = f"{self.currency} {{:,.2f}}".format
+    def run(self, broker="clear"):
+        self.broker = broker.lower()
+        self.currency = currency_market_map[broker]
+        pd.options.display.float_format = f"{self.currency.symbol} {{:,.2f}}".format
         self.open_dataframe()
         self.load_statement()
         self.load_external_data()
@@ -523,12 +551,12 @@ if __name__ == "__main__":
         root = "d:/"
     root += "Investing/"
     # wallet = Wallet(root, )
-    # wallet.run(market='br')
+    # wallet.run(market='clear')
 
     wallet_us = Wallet(
         root,
     )
-    wallet_us.run(market="us")
+    wallet_us.run(broker="tdameritrade")
 
     # wallet.export_to_excel(root + 'out.xlsx')
     # wallet.generate_charts()

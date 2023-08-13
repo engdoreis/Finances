@@ -15,6 +15,7 @@ from .SplitsReader import *
 from .StockInfoCache import *
 from .TableAccumulator import *
 from .YfinanceReader import *
+from .Currency import *
 
 if __name__ == "__main__":
 

@@ -7,7 +7,7 @@ from .Color import Color
 
 class PerformanceViewer:
     def __init__(self, *args):
-        self.pf = pd.DataFrame(columns=["Item", "BRL", "USD", "%"])
+
         if len(args) == 2 and isinstance(args[0], pd.DataFrame):
             row = args[0].set_index("Date").loc[args[1]]
             self.buildTable(
@@ -51,26 +51,30 @@ class PerformanceViewer:
         selic,
         ibov,
         sp500,
-        currency="$",
+        currency="USD",
         exchangeRatio=0.22,
     ):
-        self.pf.loc[len(self.pf)] = ["Equity          ", equity, equity, equity / cost]
-        self.pf.loc[len(self.pf)] = ["Cost            ", cost, cost, 1]
-        self.pf.loc[len(self.pf)] = ["Expenses        ", expense, expense, expense / cost]
-        self.pf.loc[len(self.pf)] = ["Paper profit    ", paperProfit, paperProfit, paperProfit / cost]
-        self.pf.loc[len(self.pf)] = ["Realized profit ", profit, profit, profit / cost]
-        self.pf.loc[len(self.pf)] = ["Dividends       ", div, div, div / cost]
-        self.pf.loc[len(self.pf)] = ["Total Profit    ", totalProfit, totalProfit, totalProfit / cost]
-        if currency == "$":
-            self.pf.loc[:, "BRL"] /= exchangeRatio
-        else:
-            self.pf.loc[:, "USD"] *= exchangeRatio
-        self.pf.loc[len(self.pf)] = ["Selic    ", 0, 0, selic]
-        self.pf.loc[len(self.pf)] = ["Ibov     ", 0, 0, ibov]
-        self.pf.loc[len(self.pf)] = ["S&P500   ", 0, 0, sp500]
+        self.pf = pd.DataFrame(columns=["Item", currency])
+        self.pf.loc[len(self.pf)] = ["Equity          ", equity]
+        self.pf.loc[len(self.pf)] = ["Cost            ", cost]
+        self.pf.loc[len(self.pf)] = ["Expenses        ", expense]
+        self.pf.loc[len(self.pf)] = ["Paper profit    ", paperProfit]
+        self.pf.loc[len(self.pf)] = ["Realized profit ", profit]
+        self.pf.loc[len(self.pf)] = ["Dividends       ", div]
+        self.pf.loc[len(self.pf)] = ["Total Profit    ", totalProfit]
+
+        self.pf["%"] = self.pf[currency] / cost
+
+        self.pf.loc[len(self.pf)] = ["Selic    ", 0, selic]
+        self.pf.loc[len(self.pf)] = ["Ibov     ", 0, ibov]
+        self.pf.loc[len(self.pf)] = ["S&P500   ", 0, sp500]
         self.pf.loc[:, "%"] *= 100
+
+        if currency != "USD":
+            self.pf["USD"] =  self.pf[currency] * exchangeRatio
+
         self.pf.set_index("Item", inplace=True)
 
     def show(self):
-        format_dict = {"USD": " {:^,.2f}", "BRL": " {:^,.2f}", "%": " {:>.1f}%"}
+        format_dict = {"USD": " {:^,.2f}", "BRL": " {:^,.2f}", "GBP": " {:^,.2f}", "%": " {:>.1f}%"}
         return self.pf.style.applymap(Color().color_negative_red).format(format_dict)

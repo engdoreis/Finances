@@ -9,6 +9,7 @@ from .ClearDivStatement import *
 from .ClearProventos import *
 from .OrdersReader import *
 from .TDAmeritrade import *
+from .Trading212 import *
 
 
 def to_float(str, decimal=",", thousand="."):

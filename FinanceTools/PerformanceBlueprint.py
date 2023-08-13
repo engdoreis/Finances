@@ -5,7 +5,8 @@ from .Portifolio import Portifolio
 
 class PerformanceBlueprint:
     equity = cost = realizedProfit = div = paperProfit = profit = usdIbov = ibov = sp500 = profitRate = expense = 0
-    def __init__(self, price_reader, split_reader, dataframe, date, currency="R$"):
+
+    def __init__(self, price_reader, split_reader, dataframe, date, currency="USD"):
         self.currency = currency
         self.price_reader = price_reader
         self.date = date
@@ -35,5 +36,5 @@ class PerformanceBlueprint:
             self.cum_cdb = indexHistory.apply(lambda y: ((y + 1) ** (1 / 365))).cumprod().iloc[-1] - 1
 
             self.expense = self.df.loc[self.df.OPERATION == "B", "FEE"].sum()
-            self.exchangeRatio = self.price_reader.getIndexCurrentValue("USD", self.date)
+            self.exchangeRatio = 1 if self.currency == "USD" else self.price_reader.getIndexCurrentValue(self.currency + "USD", self.date)
             return self

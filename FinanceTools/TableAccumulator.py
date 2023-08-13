@@ -5,11 +5,12 @@ import pandas as pd
 class TableAccumulator:
     cash = avr = brl_avr = qty_cum = prov_cum = 0
 
-    def __init__(self, pcr=None):
+    def __init__(self, pcr=None, currency="USD"):
         self.pcr = pcr
+        self.currency = currency
 
     def get_currency_rate(self, date: str):
-        return self.pcr.getIndexCurrentValue("USD", date) if self.pcr else 1
+        return 1 if self.currency == "USD" else self.pcr.getIndexCurrentValue(self.currency + "USD", date) if self.pcr else 1
 
     def ByRow(self, row):
         total = row.loc["AMOUNT"]

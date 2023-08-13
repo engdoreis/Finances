@@ -32,9 +32,9 @@ class PriceReader:
         self.df = self.df.set_index("Date").sort_index()
         # self.df.to_csv('debug.csv', sep='\t')
 
-        indexList = ["^BVSP", "^GSPC", "BRLUSD=X"]
+        indexList = ["^BVSP", "^GSPC", "BRLUSD=X", "GBPUSD=X"]
         self.brlIndex = self.readUSData(indexList, self.start_date).reset_index()
-        self.brlIndex.rename(columns={"^BVSP": "IBOV", "^GSPC": "S&P500", "BRLUSD=X": "USD"}, inplace=True)
+        self.brlIndex.rename(columns={"^BVSP": "IBOV", "^GSPC": "S&P500", "BRLUSD=X": "BRLUSD", "GBPUSD=X": "GBPUSD"}, inplace=True)
         self.brlIndex = self.brlIndex.merge(self.read_br_selic(self.start_date), on="Date")
         self.brlIndex = self.brlIndex.set_index("Date")
 
