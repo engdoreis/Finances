@@ -6,10 +6,10 @@ from .Broaker import Broaker
 
 
 class Clear(Broaker):
-    def __init__(self, outDir, name="default"):
+    def __init__(self, outDir, name="default.csv"):
         super().__init__(outDir, name)
 
-    def process(self, page):
+    def process_order(self, page):
         liqFee = liqFee = emolFee = opFee = exFee = custodyFee = irrf = taxes = otherFee = 0
 
         text = page.extract_text()

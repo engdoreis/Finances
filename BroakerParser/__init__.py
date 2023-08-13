@@ -25,7 +25,7 @@ def TDAmeritradeTest():
     pdf = pdfplumber.open("d:/Investing/Notas_TD/Trade_Confirmations.pdf", password="371")
     pgObj = TDAmeritrade("d:/Investing/", "TD")
     for page in pdf.pages:
-        pgObj.process(page)
+        pgObj.process_order(page)
 
     pgObj.finish()
 

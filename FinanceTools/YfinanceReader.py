@@ -2,6 +2,8 @@ import pandas as pd
 import yfinance as yf
 from .DividendReader import DividendReader
 
+# 30% tax
+tax_rate = 0.3
 
 class YfinanceReader(DividendReader):
     def loadData(self, paperList, type=None):
@@ -20,9 +22,7 @@ class YfinanceReader(DividendReader):
         res.rename(columns={"Date": "DATE", "Dividends": "PRICE"}, inplace=True)
         res["PAYDATE"] = res["DATE"] = pd.to_datetime(res["DATE"], format="%Y/%m/%d").dt.tz_localize(None)
         res = res[res["DATE"] >= self.start_date]
-        # 30% tax
-        res["TAX"] = res["PRICE"] * 0.3 * 0
-        # print(res)
+        res["TAX"] = res["PRICE"] * tax_rate * 0
         res = res[["SYMBOL", "DATE", "PRICE", "PAYDATE", "TAX"]]
         res["OPERATION"] = "D2"
         return res

@@ -4,16 +4,10 @@ from .Portifolio import Portifolio
 
 
 class PerformanceBlueprint:
+    equity = cost = realizedProfit = div = paperProfit = profit = usdIbov = ibov = sp500 = profitRate = expense = 0
     def __init__(self, price_reader, split_reader, dataframe, date, currency="R$"):
         self.currency = currency
         self.price_reader = price_reader
-        self.equity = (
-            self.cost
-        ) = (
-            self.realizedProfit
-        ) = (
-            self.div
-        ) = self.paperProfit = self.profit = self.usdIbov = self.ibov = self.sp500 = self.profitRate = self.expense = 0
         self.date = date
         self.df = dataframe[(dataframe["DATE"] <= date)].copy(deep=True)
         if not self.df.empty:

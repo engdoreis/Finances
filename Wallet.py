@@ -7,7 +7,7 @@ from collections import namedtuple
 import numpy as np
 import pandas as pd
 
-from BroakerParser import ClearDivStatement, ReadOrders, ReadTDStatement
+from BroakerParser import ClearDivStatement, ReadOrders, TDAmeritrade
 from FinanceTools import (
     Color,
     DividendReader,
@@ -33,18 +33,18 @@ class Wallet:
         self.work_dir = work_dir
         if work_dir[-1] != "/":
             self.work_dir += "/"
-        self.td_config = namedtuple("config", "order_dir dataframe_path dividends_statement_path recomended_wallet")
-        self.clear_config = namedtuple("config", "order_dir dataframe_path dividends_statement_path recomended_wallet")
+        self.td_config = namedtuple("config", "order_dir dataframe_path dividends_statement_path recommended_wallet")
+        self.clear_config = namedtuple("config", "order_dir dataframe_path dividends_statement_path recommended_wallet")
 
         self.td_config.order_dir = self.work_dir + "Notas_TD"
         self.td_config.dividends_statement_path = self.work_dir + "Notas_TD"
         self.td_config.dataframe_path = self.work_dir + "TD.csv"
-        self.td_config.recomended_wallet = self.td_config.order_dir + "/global_wallet.json"
+        self.td_config.recommended_wallet = self.td_config.order_dir + "/global_wallet.json"
 
         self.clear_config.order_dir = self.work_dir + "Notas_Clear"
         self.clear_config.dividends_statement_path = self.work_dir + "Notas_Clear/Statements"
         self.clear_config.dataframe_path = self.work_dir + "operations.csv"
-        self.clear_config.recomended_wallet = self.clear_config.order_dir + "/iv_wallet.json"
+        self.clear_config.recommended_wallet = self.clear_config.order_dir + "/iv_wallet.json"
         try:
             os.mkdir("debug")
         except:
@@ -61,7 +61,8 @@ class Wallet:
             ReadOrders(self.clear_config.order_dir, self.clear_config.dataframe_path, "Clear")
             self.df = pd.read_csv(self.clear_config.dataframe_path)
         else:
-            ReadTDStatement(self.td_config.order_dir, self.td_config.dataframe_path)
+            td = TDAmeritrade(self.td_config.dataframe_path)
+            td.read_statement(self.td_config.order_dir)
             self.df = pd.read_csv(self.td_config.dataframe_path)
 
         self.df = self.df.iloc[:, :7]
@@ -144,13 +145,13 @@ class Wallet:
         print("Executed in %s seconds" % (time.time() - start_time))
         self.prcReader.df.to_csv("debug/log_pcr.tsv", sep="\t")
 
-    def load_recomended_wallet(self):
+    def load_recommended_wallet(self):
         import json
 
-        wallet_file = self.clear_config.recomended_wallet if self.market == "br" else self.td_config.recomended_wallet
-        self.recomended_wallet = None
+        wallet_file = self.clear_config.recommended_wallet if self.market == "br" else self.td_config.recommended_wallet
+        self.recommended_wallet = None
         with open(wallet_file) as file:
-            self.recomended_wallet = json.load(file)
+            self.recommended_wallet = json.load(file)
 
     def merge_statement_data(self):
         if self.market == "br":
@@ -302,7 +303,7 @@ class Wallet:
     def compute_portifolio(self):
         today = dt.datetime.today().strftime("%Y-%m-%d")
         self.portifolio_df = Portifolio(
-            self.prcReader, self.splReader, today, self.df, self.recomended_wallet, self.currency
+            self.prcReader, self.splReader, today, self.df, self.recommended_wallet, self.currency
         ).show()
 
     def compute_blueprint(self):
@@ -310,20 +311,6 @@ class Wallet:
             self.prcReader, self.splReader, self.df, dt.datetime.today().strftime("%Y-%m-%d"), currency=self.currency
         )
         self.blueprint_df = PerformanceViewer(p.calc()).show()
-
-    def compute_taxation(self):
-        profitLossDf = self.df.loc[self.df["Profit"] != 0]
-        tx = Taxation(profitLossDf.df)
-
-        tx.Process("FII")
-        tx.swingTradeTable.to_excel(self.work_dir + "tx_swgfii.xlsx")
-
-        tx.dayTradeTable.to_excel(self.work_dir + "tx_dtfii.xlsx")
-
-        tx.Process("Ação")
-        tx.swingTradeTable.to_excel(self.work_dir + "tx_swgacao.xlsx")
-
-        tx.dayTradeTable.to_excel(self.work_dir + "tx_dtacao.xlsx")
 
     def compute_dividends(self):
         self.prov_month = pd.DataFrame()
@@ -343,7 +330,6 @@ class Wallet:
             if prov_month.empty:
                 continue
 
-            m_name = date.strftime("%B")
             prov_month = prov_month[["PAYDATE", "SYMBOL", "AMOUNT"]]
             prov_month.columns = ["DATE", "SYMBOL", self.currency]
             prov_month = prov_month.groupby(["SYMBOL", "DATE"])[self.currency].sum().reset_index()
@@ -396,10 +382,9 @@ class Wallet:
         monthList.append(dt.datetime.today().strftime("%Y-%m-%d"))
         performanceList = []
         if period.lower() == "all":
-            date = startPlot - pd.DateOffset(weeks=(2 if frequency == "SM" else 1))
             performanceList.append([startPlot - pd.DateOffset(weeks=2), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
 
-        for i, month in enumerate(monthList):
+        for month in monthList:
             p = PerformanceBlueprint(self.prcReader, self.splReader, self.df, month).calc()
             performanceList.append(
                 [
@@ -491,7 +476,7 @@ class Wallet:
         self.open_dataframe()
         self.load_statement()
         self.load_external_data()
-        self.load_recomended_wallet()
+        self.load_recommended_wallet()
 
         self.merge_statement_data()
         self.merge_external_data()
