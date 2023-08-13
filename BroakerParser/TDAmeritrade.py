@@ -41,9 +41,9 @@ class TDAmeritrade(Broaker):
                 continue
         self.dtFrame = self.dtFrame.merge(pd.DataFrame(line_itens), how="outer")
 
-    def read_statement(self, inDir):
+    def read_statement(self, in_dir):
         table = pd.DataFrame()
-        for file in sorted(glob(inDir + "/*.csv")):
+        for file in sorted(glob(in_dir + "/*.csv")):
             df = pd.read_csv(file)
             df = df[~df["DATE"].str.contains("END OF FILE")].fillna(0)
             df["TYPE"] = "STOCK"

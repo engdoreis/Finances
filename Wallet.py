@@ -2,6 +2,7 @@ import datetime as dt
 import sys
 import threading
 import time
+from enum import Enum
 
 import numpy as np
 import pandas as pd
@@ -28,46 +29,25 @@ class Currency:
     name: str
     symbol:str
 
-currency_market_map = {"tdameritrade": Currency("USD", "$"), "clear": Currency("BRL", "R$"), "trading212": Currency("GBP", "£")}
+class Broker(Enum):
+    CLEAR = 1
+    TDAMERITRADE = 2
+    TRADING212 = 3
 
+currency_market_map = {Broker.TDAMERITRADE: Currency("USD", "$"), Broker.CLEAR: Currency("BRL", "R$"), Broker.TRADING212: Currency("GBP", "£")}
 
 @dataclass
-class Config:
-    order_dir: str
-    dataframe_path: str
-    dividends_statement_path: str
-    recommended_wallet: str
-
+class Input:
+    broker: Broker
+    statement_dir: str
+    recommended_wallet: str = None
 
 class Wallet:
-    def __init__(self, work_dir):
+    def __init__(self, work_dir: str):
         self.work_dir = work_dir
         if work_dir[-1] != "/":
             self.work_dir += "/"
 
-        order_dir = self.work_dir + "Notas_TD"
-        self.td_config = Config(
-            order_dir=order_dir,
-            dividends_statement_path=self.work_dir + "Notas_TD",
-            dataframe_path=self.work_dir + "TD.csv",
-            recommended_wallet=order_dir + "/global_wallet.json",
-        )
-
-        order_dir = self.work_dir + "Notas_Clear"
-        self.clear_config = Config(
-            order_dir=order_dir,
-            dividends_statement_path=self.work_dir + "Notas_Clear/Statements",
-            dataframe_path=self.work_dir + "operations.csv",
-            recommended_wallet=order_dir + "/iv_wallet.json",
-        )
-
-        order_dir = self.work_dir + "Notas_T212"
-        self.t212_config = Config(
-            order_dir=order_dir,
-            dividends_statement_path=self.work_dir + "Notas_T212",
-            dataframe_path=self.work_dir + "T212.csv",
-            recommended_wallet=order_dir + "/global_wallet.json",
-        )
         try:
             os.mkdir("debug")
         except:
@@ -80,17 +60,19 @@ class Wallet:
         df.to_csv(file_, index=False)
 
     def open_dataframe(self):
-        if self.broker == "clear":
-            ReadOrders(self.clear_config.order_dir, self.clear_config.dataframe_path, "Clear")
+        if self.input.broker == Broker.CLEAR:
+            ReadOrders(self.input.statement_dir, self.clear_config.dataframe_path, "Clear")
             self.df = pd.read_csv(self.clear_config.dataframe_path)
-        elif self.broker == "tdameritrade":
-            broaker = TDAmeritrade(self.td_config.dataframe_path)
-            broaker.read_statement(self.td_config.order_dir)
-            self.df = pd.read_csv(self.td_config.dataframe_path)
-        elif self.broker == "trading212":
-            broaker = Trading212(self.t212_config.dataframe_path)
-            broaker.read_statement(self.t212_config.order_dir)
-            self.df = pd.read_csv(self.t212_config.dataframe_path)
+        elif self.input.broker == Broker.TDAMERITRADE:
+            csv = self.work_dir + "TD.csv"
+            broker = TDAmeritrade(csv)
+            broker.read_statement(self.input.statement_dir)
+            self.df = pd.read_csv(csv)
+        elif self.input.broker == Broker.TRADING212:
+            csv = self.work_dir + "T212.csv"
+            broker = Trading212(csv)
+            broker.read_statement(self.input.statement_dir)
+            self.df = pd.read_csv(csv)
 
         self.df = self.df.iloc[:, :7]
         self.df.columns = ["SYMBOL", "DATE", "PRICE", "QUANTITY", "OPERATION", "TYPE", "FEE"]
@@ -98,7 +80,7 @@ class Wallet:
         # drop empty lines
         self.df = self.df[self.df["DATE"].astype(bool)].dropna()
 
-        if self.broker == "clear":
+        if self.input.broker == Broker.CLEAR:
             self.brTickers = np.sort(self.df[self.df["TYPE"].isin(["Ação"])]["SYMBOL"].unique()).tolist()
             self.fiiTickers = np.sort(self.df[self.df["TYPE"] == "FII"]["SYMBOL"].unique()).tolist()
             self.usTickers = []
@@ -131,7 +113,7 @@ class Wallet:
         self.df["AMOUNT"] = self.df["PRICE"] * self.df["QUANTITY"]
 
     def load_statement(self):
-        if self.broker == "clear":
+        if self.input.broker == Broker.CLEAR:
             st = ClearDivStatement(
                 self.clear_config.dividends_statement_path, self.clear_config.dividends_statement_path, "divTable"
             )
@@ -150,7 +132,7 @@ class Wallet:
         self.prcReader = PriceReader(self.brTickers + self.fiiTickers, self.usTickers, self.start_date)
         self.splReader = SplitsReader(self.brTickers, self.usTickers, self.start_date)
 
-        if self.broker == "clear":
+        if self.input.broker == Broker.CLEAR:
             self.divReader = DividendReader(self.brTickers, self.fiiTickers, None, div_start_date)
         else:
             self.divReader = YfinanceReader(None, None, self.usTickers, div_start_date)
@@ -174,14 +156,17 @@ class Wallet:
 
     def load_recommended_wallet(self):
         import json
+        self.recommended_wallet = None
+        if self.input.recommended_wallet == None:
+            return
 
-        wallet_file = self.clear_config.recommended_wallet if self.broker == "clear" else self.td_config.recommended_wallet
+        wallet_file = self.input.recommended_wallet if self.input.broker == "clear" else self.td_config.recommended_wallet
         self.recommended_wallet = None
         with open(wallet_file) as file:
             self.recommended_wallet = json.load(file)
 
     def merge_statement_data(self):
-        if self.broker == "clear":
+        if self.input.broker == Broker.CLEAR:
             self.df["PAYDATE"] = self.df["DATE"]
 
             def getType(symbol):
@@ -282,7 +267,7 @@ class Wallet:
         tmp.reset_index(drop=True)
         self.df = tmp.groupby(["SYMBOL", "DATE"], group_keys=False).apply(profit.Trade).reset_index(drop=True)
         self.df.sort_values(["PAYDATE", "OPERATION"], ascending=[True, False]).to_csv(
-            f"debug/df_log_{self.broker}.tsv", sep="\t"
+            f"debug/df_log_{self.input.broker}.tsv", sep="\t"
         )
 
         rl = self.df[self.df.OPERATION == "S"][
@@ -497,9 +482,10 @@ class Wallet:
         self.history_chart = fig
         return plt.show()
 
-    def run(self, broker="clear"):
-        self.broker = broker.lower()
-        self.currency = currency_market_map[broker]
+    def run(self, input:Input):
+
+        self.input = input
+        self.currency = currency_market_map[input.broker]
         pd.options.display.float_format = f"{self.currency.symbol} {{:,.2f}}".format
         self.open_dataframe()
         self.load_statement()

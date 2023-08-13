@@ -12,12 +12,12 @@ from FinanceTools import CompanyListReader
 
 
 class OrderOrganizer:
-    def __init__(self, inDir):
+    def __init__(self, in_dir):
         self.dtFrame = pd.DataFrame(
             columns=["Code", "Date", "Company", "Type", "Category", "Qty", "Value", "Total", "Sub"]
         )
 
-        files = sorted(glob(inDir + "/*.csv"))
+        files = sorted(glob(in_dir + "/*.csv"))
         for file in files:
             self.dtFrame = self.dtFrame.merge(pd.read_csv(file), how="outer")
 
