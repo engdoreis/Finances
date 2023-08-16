@@ -160,7 +160,7 @@ class Wallet:
         if self.input.recommended_wallet == None:
             return
 
-        wallet_file = self.input.recommended_wallet if self.input.broker == "clear" else self.td_config.recommended_wallet
+        wallet_file = self.input.recommended_wallet if self.input.broker == "clear" else self.input.recommended_wallet
         self.recommended_wallet = None
         with open(wallet_file) as file:
             self.recommended_wallet = json.load(file)
