@@ -10,7 +10,13 @@ class TableAccumulator:
         self.currency = currency
 
     def get_currency_rate(self, date: str):
-        return 1 if self.currency == "USD" else self.pcr.getIndexCurrentValue(self.currency + "USD", date) if self.pcr else 1
+        return (
+            1
+            if self.currency == "USD"
+            else self.pcr.getIndexCurrentValue(self.currency + "USD", date)
+            if self.pcr
+            else 1
+        )
 
     def ByRow(self, row):
         total = row.loc["AMOUNT"]

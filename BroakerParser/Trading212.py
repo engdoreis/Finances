@@ -23,7 +23,18 @@ class Trading212(Broaker):
             df["TYPE"] = "STOCK"
             # df["COMMISSION"] = 0
             df["DATE"] = pd.to_datetime(df["Time"]).dt.strftime("%Y-%m-%d")
-            df = df[["Ticker", "DATE", "Price / share", "No. of shares", "Action", "TYPE", "Currency conversion fee", "Total"]]
+            df = df[
+                [
+                    "Ticker",
+                    "DATE",
+                    "Price / share",
+                    "No. of shares",
+                    "Action",
+                    "TYPE",
+                    "Currency conversion fee",
+                    "Total",
+                ]
+            ]
             df.columns = ["SYMBOL", "DATE", "PRICE", "QUANTITY", "Action", "TYPE", "COMMISSION", "AMOUNT"]
 
             df.fillna(0, inplace=True)
@@ -45,17 +56,19 @@ class Trading212(Broaker):
 
         table.to_csv(self.output, index=False)
 
+
 def isin_process(row):
     isin = str(row["ISIN"])
     currency = row["Currency (Price / share)"]
     if isin.startswith("GB") or currency == "GBP":
-        row["Ticker"] += ".L" 
+        row["Ticker"] += ".L"
 
-    # FIX: This is handling an exception when a free share is earned. This can make US shares to have UK ISIN 
+    # FIX: This is handling an exception when a free share is earned. This can make US shares to have UK ISIN
     sdrt = row.get("Stamp duty reserve tax", 0)
     if sdrt > 0:
         row["Ticker"] = row["Ticker"].replace(".L", "")
     return row
+
 
 def action_process(row):
     action = row["Action"].lower()

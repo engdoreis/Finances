@@ -6,7 +6,7 @@ from .CompanyListReader import *
 from .DataFrameMerger import *
 from .DividendReader import *
 from .Fundamentus_Page import *
-from .PerformanceBlueprint import *
+from .PerformanceSnapshot import *
 from .PerformanceViewer import *
 from .Portfolio import *
 from .PriceReader import *

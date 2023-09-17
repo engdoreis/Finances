@@ -1,13 +1,12 @@
 import numpy as np
 import pandas as pd
 
-from .PerformanceBlueprint import PerformanceBlueprint
+from .PerformanceSnapshot import PerformanceSnapshot
 from .Color import Color
 
 
 class PerformanceViewer:
     def __init__(self, *args):
-
         if len(args) == 2 and isinstance(args[0], pd.DataFrame):
             row = args[0].set_index("Date").loc[args[1]]
             self.buildTable(
@@ -22,7 +21,7 @@ class PerformanceViewer:
                 row["Ibov"],
                 row["SP500"],
             )
-        elif isinstance(args[0], PerformanceBlueprint):
+        elif isinstance(args[0], PerformanceSnapshot):
             p = args[0]
             self.buildTable(
                 p.equity,
@@ -68,13 +67,17 @@ class PerformanceViewer:
         self.pf.loc[len(self.pf)] = ["Selic    ", 0, selic]
         self.pf.loc[len(self.pf)] = ["Ibov     ", 0, ibov]
         self.pf.loc[len(self.pf)] = ["S&P500   ", 0, sp500]
-        self.pf.loc[:, "%"] *= 100
 
         if currency != "USD":
-            self.pf["USD"] =  self.pf[currency] * exchangeRatio
+            self.pf["USD"] = self.pf[currency] * exchangeRatio
 
         self.pf.set_index("Item", inplace=True)
 
-    def show(self):
+    def get_table(self):
+        return self.pf
+
+    def get_formatted(self):
+        df = self.pf.copy(deep=True)
+        df.loc[:, "%"] *= 100
         format_dict = {"USD": " {:^,.2f}", "BRL": " {:^,.2f}", "GBP": " {:^,.2f}", "%": " {:>.1f}%"}
-        return self.pf.style.applymap(Color().color_negative_red).format(format_dict)
+        return df.style.applymap(Color().color_negative_red).format(format_dict)

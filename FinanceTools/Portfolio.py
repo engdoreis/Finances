@@ -46,9 +46,9 @@ class Portfolio:
 
         self.dtframe[f"GAIN({currency})"] = self.dtframe["MKT_VALUE"] - self.dtframe["COST"]
         self.dtframe[f"GAIN+DIV({currency})"] = self.dtframe[f"GAIN({currency})"] + self.dtframe["DIVIDENDS"]
-        self.dtframe["GAIN(%)"] = self.dtframe[f"GAIN({currency})"] / self.dtframe["COST"] * 100
-        self.dtframe["GAIN+DIV(%)"] = self.dtframe[f"GAIN+DIV({currency})"] / self.dtframe["COST"] * 100
-        self.dtframe["ALLOCATION"] = (self.dtframe["MKT_VALUE"] / self.dtframe["MKT_VALUE"].sum()) * 100
+        self.dtframe["GAIN(%)"] = self.dtframe[f"GAIN({currency})"] / self.dtframe["COST"]
+        self.dtframe["GAIN+DIV(%)"] = self.dtframe[f"GAIN+DIV({currency})"] / self.dtframe["COST"]
+        self.dtframe["ALLOCATION"] = self.dtframe["MKT_VALUE"] / self.dtframe["MKT_VALUE"].sum()
         self.dtframe = self.dtframe.replace([np.inf, -np.inf], np.nan).fillna(0)
 
         self.dtframe = self.dtframe[self.dtframe["PM"] > 0]
@@ -96,17 +96,21 @@ class Portfolio:
             *self.dtframe["SYMBOL"].map(lambda x: self.recommended(recommended, x))
         )
         self.dtframe["BUY"] = (
-            self.dtframe["QUANTITY"] * (self.dtframe["TARGET"] / 100 - self.dtframe["ALLOCATION"] / 100)
-        ) / (self.dtframe["ALLOCATION"] / 100)
+            self.dtframe["QUANTITY"] * (self.dtframe["TARGET"] - self.dtframe["ALLOCATION"])
+        ) / self.dtframe["ALLOCATION"]
+
         format = {"TARGET": "{:,.2f}%", "TOP_PRICE": f"{self.currency} {{:,.2f}}", "BUY": "{:,.1f}"}
         self.format = {**self.format, **format}
 
     def recommended(self, recom, symbol):
         for ticker in recom["Tickers"]:
             if symbol == ticker["Ticker"]:
-                return float(ticker["Participation"]) * 100, float(ticker["Top"]), int(ticker["Priority"])
+                return float(ticker["Participation"]), float(ticker["Top"]), int(ticker["Priority"])
         return 0, 0, 99
 
+    def get_table(self):
+        return self.dtframe
+
     def show(self):
-        fdf = self.dtframe
+        fdf = self.dtframe.copy(deep=True)
         return fdf.style.applymap(Color().color_negative_red).format(self.format)

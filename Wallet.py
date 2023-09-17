@@ -11,7 +11,7 @@ from BroakerParser import ClearDivStatement, ReadOrders, TDAmeritrade, Trading21
 from FinanceTools import (
     Color,
     DividendReader,
-    PerformanceBlueprint,
+    PerformanceSnapshot,
     PerformanceViewer,
     Portfolio,
     PriceReader,
@@ -24,17 +24,25 @@ from IRPF_Tools import *
 
 pd.options.display.float_format = "${:,.2f}".format
 
+
 @dataclass
 class Currency:
     name: str
-    symbol:str
+    symbol: str
+
 
 class Broker(Enum):
     CLEAR = 1
     TDAMERITRADE = 2
     TRADING212 = 3
 
-currency_market_map = {Broker.TDAMERITRADE: Currency("USD", "$"), Broker.CLEAR: Currency("BRL", "R$"), Broker.TRADING212: Currency("GBP", "£")}
+
+currency_market_map = {
+    Broker.TDAMERITRADE: Currency("USD", "$"),
+    Broker.CLEAR: Currency("BRL", "R$"),
+    Broker.TRADING212: Currency("GBP", "£"),
+}
+
 
 @dataclass
 class Input:
@@ -42,7 +50,10 @@ class Input:
     statement_dir: str
     recommended_wallet: str = None
 
+
 class Wallet:
+    input = None
+
     def __init__(self, work_dir: str):
         self.work_dir = work_dir
         if work_dir[-1] != "/":
@@ -156,6 +167,7 @@ class Wallet:
 
     def load_recommended_wallet(self):
         import json
+
         self.recommended_wallet = None
         if self.input.recommended_wallet == None:
             return
@@ -255,11 +267,7 @@ class Wallet:
         tab_accum = TableAccumulator(self.prcReader, self.currency.name)
         self.df = self.df.apply(tab_accum.Cash, axis=1).reset_index(drop=True)
 
-        self.df = (
-            self.df.groupby(["SYMBOL"], group_keys=False)
-            .apply(tab_accum.ByGroup)
-            .reset_index(drop=True)
-        )
+        self.df = self.df.groupby(["SYMBOL"], group_keys=False).apply(tab_accum.ByGroup).reset_index(drop=True)
 
     def compute_realized_profit(self):
         profit = Profit()
@@ -281,7 +289,11 @@ class Wallet:
         rl1.loc["Total", "AMOUNT"] = 0
         rl1 = rl1.fillna(" ").reset_index(drop=True)
         self.realized_profit_df = rl1.style.applymap(Color().color_negative_red, subset=["Profit", "AMOUNT"]).format(
-            {"AMOUNT": f"{self.currency.symbol} {{:,.2f}}", "Profit": f"{self.currency.symbol} {{:,.2f}}", "DayTrade": "{}"}
+            {
+                "AMOUNT": f"{self.currency.symbol} {{:,.2f}}",
+                "Profit": f"{self.currency.symbol} {{:,.2f}}",
+                "DayTrade": "{}",
+            }
         )
 
         rl1 = rl.groupby("SYMBOL").Profit.sum().reset_index()
@@ -315,15 +327,23 @@ class Wallet:
 
     def compute_portfolio(self):
         today = dt.datetime.today().strftime("%Y-%m-%d")
-        self.portfolio_df = Portfolio(
+        portfolio = Portfolio(
             self.prcReader, self.splReader, today, self.df, self.recommended_wallet, self.currency.symbol
-        ).show()
-
-    def compute_blueprint(self):
-        p = PerformanceBlueprint(
-            self.prcReader, self.splReader, self.df, dt.datetime.today().strftime("%Y-%m-%d"), currency=self.currency.name
         )
-        self.blueprint_df = PerformanceViewer(p.calc()).show()
+        self.portfolio_df = portfolio.get_table()
+        self.portfolio_view = portfolio.show()
+
+    def compute_snapshot(self):
+        p = PerformanceSnapshot(
+            self.prcReader,
+            self.splReader,
+            self.df,
+            dt.datetime.today().strftime("%Y-%m-%d"),
+            currency=self.currency.name,
+        )
+        snapshot = PerformanceViewer(p.calc())
+        self.performance_snapshot = snapshot.get_table()
+        self.snapshot_view = snapshot.get_formatted()
 
     def compute_dividends(self):
         self.prov_month = pd.DataFrame()
@@ -379,7 +399,7 @@ class Wallet:
         else:
             self.pvt_div_table = pd.DataFrame()
 
-    def compute_history_blueprint(self, period="all"):
+    def compute_history_snapshot(self, period="all"):
         startPlot = self.start_date
         frequency = "SM"
 
@@ -398,7 +418,7 @@ class Wallet:
             performanceList.append([startPlot - pd.DateOffset(weeks=2), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
 
         for month in monthList:
-            p = PerformanceBlueprint(self.prcReader, self.splReader, self.df, month).calc()
+            p = PerformanceSnapshot(self.prcReader, self.splReader, self.df, month).calc()
             performanceList.append(
                 [
                     dt.datetime.strptime(p.date, "%Y-%m-%d"),
@@ -426,18 +446,18 @@ class Wallet:
                 "Div",
                 "paperProfit",
                 "TotalProfit",
-                "%Profit",
+                "profit_growth",
                 "Expense",
-                "%IBOV",
-                "%SP500",
+                "ibov_growth",
+                "sp500_growth",
                 "CDB",
             ],
         )
 
         if period.lower() != "all":
-            histProfDF["%IBOV"] -= histProfDF.iloc[1, "%IBOV"]
-            histProfDF["%SP500"] -= histProfDF.iloc[1, "%SP500"]
-            histProfDF["%Profit"] -= histProfDF.iloc[1, "%Profit"]
+            histProfDF["ibov_growth"] -= histProfDF.iloc[1, "ibov_growth"]
+            histProfDF["sp500_growth"] -= histProfDF.iloc[1, "sp500_growth"]
+            histProfDF["profit_growth"] -= histProfDF.iloc[1, "profit_growth"]
         self.historic_profit_df = histProfDF
         self.history_df_frequency = frequency
 
@@ -453,13 +473,17 @@ class Wallet:
         fig, ax = plt.subplots(2, 1, figsize=(32, 9), sharex=True, gridspec_kw={"height_ratios": [3, 1]})
         fig.tight_layout()
 
-        ax[0].plot(histProfDF.Date, histProfDF["%IBOV"], label="ibovespa")
-        ax[0].plot(histProfDF.Date, histProfDF["%SP500"], label="S&P500")
-        ax[0].plot(histProfDF.Date, histProfDF["%Profit"], label="Wallet")
+        ax[0].plot(histProfDF.Date, histProfDF["ibov_growth"], label="ibovespa")
+        ax[0].plot(histProfDF.Date, histProfDF["sp500_growth"], label="S&P500")
+        ax[0].plot(histProfDF.Date, histProfDF["profit_growth"], label="Wallet")
         ax[0].plot(histProfDF.Date, histProfDF["CDB"], label="CDB")
 
-        minTick = min(histProfDF["%IBOV"].min(), histProfDF["%SP500"].min(), histProfDF["%Profit"].min())
-        maxTick = max(histProfDF["%IBOV"].max(), histProfDF["%SP500"].max(), histProfDF["%Profit"].max())
+        minTick = min(
+            histProfDF["ibov_growth"].min(), histProfDF["sp500_growth"].min(), histProfDF["profit_growth"].min()
+        )
+        maxTick = max(
+            histProfDF["ibov_growth"].max(), histProfDF["sp500_growth"].max(), histProfDF["profit_growth"].max()
+        )
 
         ax[0].set_yticks(np.arange(minTick, maxTick, 0.03))
         ax[0].axhline(y=0, color="k")
@@ -482,10 +506,13 @@ class Wallet:
         self.history_chart = fig
         return plt.show()
 
-    def run(self, input:Input):
+    def run(self, input: Input = None):
+        if input:
+            self.input = input
+        if self.input == None:
+            return
 
-        self.input = input
-        self.currency = currency_market_map[input.broker]
+        self.currency = currency_market_map[self.input.broker]
         pd.options.display.float_format = f"{self.currency.symbol} {{:,.2f}}".format
         self.open_dataframe()
         self.load_statement()
@@ -497,14 +524,14 @@ class Wallet:
         self.compute_average_price()
         self.compute_realized_profit()
         self.compute_portfolio()
-        self.compute_blueprint()
+        self.compute_snapshot()
         self.compute_dividends()
-        self.compute_history_blueprint()
+        self.compute_history_snapshot()
 
     def export_to_excel(self, outfile):
         # Create a Pandas Excel writer using XlsxWriter as the engine.
         writer = pd.ExcelWriter(outfile, engine="xlsxwriter")
-        self.blueprint_df.to_excel(writer, sheet_name="blueprint")
+        self.snapshot_view.to_excel(writer, sheet_name="snapshot")
         self.portfolio_df.to_excel(writer, sheet_name="portfolio")
 
         self.realized_profit_pivot_all.to_excel(writer, sheet_name="realized_profit")
@@ -536,13 +563,14 @@ if __name__ == "__main__":
     else:
         root = "d:/"
     root += "Investing/"
-    # wallet = Wallet(root, )
-    # wallet.run(market='clear')
-
-    wallet_us = Wallet(
-        root,
+    config = Input(
+        broker=Broker.TDAMERITRADE,
+        statement_dir=f"{root}/transactions_td_ameritrade",
+        recommended_wallet=f"{root}/transactions_td_ameritrade/global_wallet.json",
     )
-    wallet_us.run(broker="tdameritrade")
+
+    wallet = Wallet(root + "/wallet")
+    wallet.run(input=config)
 
     # wallet.export_to_excel(root + 'out.xlsx')
     # wallet.generate_charts()

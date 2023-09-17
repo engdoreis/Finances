@@ -3,7 +3,7 @@ import pandas as pd
 from .Portfolio import Portfolio
 
 
-class PerformanceBlueprint:
+class PerformanceSnapshot:
     equity = cost = realizedProfit = div = paperProfit = profit = usdIbov = ibov = sp500 = profitRate = expense = 0
 
     def __init__(self, price_reader, split_reader, dataframe, date, currency="USD"):
@@ -36,5 +36,9 @@ class PerformanceBlueprint:
             self.cum_cdb = indexHistory.apply(lambda y: ((y + 1) ** (1 / 365))).cumprod().iloc[-1] - 1
 
             self.expense = self.df.loc[self.df.OPERATION == "B", "FEE"].sum()
-            self.exchangeRatio = 1 if self.currency == "USD" else self.price_reader.getIndexCurrentValue(self.currency + "USD", self.date)
+            self.exchangeRatio = (
+                1
+                if self.currency == "USD"
+                else self.price_reader.getIndexCurrentValue(self.currency + "USD", self.date)
+            )
             return self
