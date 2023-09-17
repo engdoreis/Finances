@@ -20,9 +20,9 @@ from .Currency import *
 if __name__ == "__main__":
 
     def clear2018Cost(row):
-        if row["DATE"].year < 2019:
+        if row[DataSchema.DATE].year < 2019:
             return 0
-        return row["FEE"]
+        return row[DataSchema.FEES]
 
     tickers = [
         "ABEV3",

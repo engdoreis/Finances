@@ -3,6 +3,8 @@ import yfinance as yf
 
 from .StockInfoCache import StockInfoCache
 
+from data import DataSchema
+
 
 class SplitsReader:
     def __init__(self, brTickers, usTickers, start_date="2018-01-01", cache="debug/cache_splits.tsv"):
@@ -24,15 +26,15 @@ class SplitsReader:
         else:
             self.df = self.cache.load_data()
 
-        self.df.set_index("DATE", inplace=True)
+        self.df.set_index(DataSchema.DATE, inplace=True)
 
     def getPeriod(self, ticker, fromDate, toDate):
-        filtered = self.df[self.df["SYMBOL"] == ticker].loc[fromDate:toDate]
-        return filtered[["SYMBOL", "QUANTITY"]]
+        filtered = self.df[self.df[DataSchema.SYMBOL] == ticker].loc[fromDate:toDate]
+        return filtered[[DataSchema.SYMBOL, DataSchema.QTY]]
 
     def get_accumulated(self, ticker, start_date):
-        filtered = self.df[self.df["SYMBOL"] == ticker].loc[start_date:]
-        return filtered["QUANTITY"].prod() if len(filtered) > 0 else 1
+        filtered = self.df[self.df[DataSchema.SYMBOL] == ticker].loc[start_date:]
+        return filtered[DataSchema.QTY].prod() if len(filtered) > 0 else 1
 
     def loadData(self, tickerList):
         res = pd.DataFrame()
@@ -41,10 +43,10 @@ class SplitsReader:
                 data = pd.DataFrame(yf.Ticker(ticker).splits)
             except:
                 continue
-            data["SYMBOL"] = ticker.replace(".SA", "")
+            data[DataSchema.SYMBOL] = ticker.replace(".SA", "")
             res = pd.concat([res, data], axis=0)
-        res.index.rename("DATE", inplace=True)
-        res.columns = ["SYMBOL", "QUANTITY"]
+        res.index.rename(DataSchema.DATE, inplace=True)
+        res.columns = [DataSchema.SYMBOL, DataSchema.QTY]
         res = res.reset_index()
-        res["DATE"] = pd.to_datetime(res["DATE"], format="%Y-%m-%d").dt.tz_localize(None)
-        return res[res["DATE"] > self.start_date]
+        res[DataSchema.DATE] = pd.to_datetime(res[DataSchema.DATE], format="%Y-%m-%d").dt.tz_localize(None)
+        return res[res[DataSchema.DATE] > self.start_date]

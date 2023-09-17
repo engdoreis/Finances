@@ -2,6 +2,8 @@ import pandas as pd
 
 from .Portfolio import Portfolio
 
+from data import DataSchema
+
 
 class PerformanceSnapshot:
     equity = cost = realizedProfit = div = paperProfit = profit = usdIbov = ibov = sp500 = profitRate = expense = 0
@@ -10,18 +12,18 @@ class PerformanceSnapshot:
         self.currency = currency
         self.price_reader = price_reader
         self.date = date
-        self.df = dataframe[(dataframe["DATE"] <= date)].copy(deep=True)
+        self.df = dataframe[(dataframe[DataSchema.DATE] <= date)].copy(deep=True)
         if not self.df.empty:
             self.portfolio = Portfolio(self.price_reader, split_reader, date, self.df)
 
     def calc(self):
         if not self.df.empty:
             ptf = self.portfolio.dtframe
-            self.equity = (ptf["PRICE"] * ptf["QUANTITY"]).sum()
+            self.equity = (ptf[DataSchema.PRICE] * ptf[DataSchema.QTY]).sum()
             self.cost = ptf["COST"].sum()
-            self.realizedProfit = self.df.loc[self.df.OPERATION == "S", "Profit"].sum()
+            self.realizedProfit = self.df.loc[self.df.OPERATION == "S", DataSchema.PROFIT].sum()
             self.div = self.df[self.df.OPERATION.isin(["D1", "A1", "R1", "JCP1", "D", "A", "R", "JCP", "CF"])][
-                "AMOUNT"
+                DataSchema.AMOUNT
             ].sum()
             self.paperProfit = self.equity - self.cost
             self.profit = self.equity - self.cost + self.realizedProfit + self.div
@@ -35,7 +37,7 @@ class PerformanceSnapshot:
             self.selic = indexHistory.iloc[-1]
             self.cum_cdb = indexHistory.apply(lambda y: ((y + 1) ** (1 / 365))).cumprod().iloc[-1] - 1
 
-            self.expense = self.df.loc[self.df.OPERATION == "B", "FEE"].sum()
+            self.expense = self.df.loc[self.df.OPERATION == "B", DataSchema.FEES].sum()
             self.exchangeRatio = (
                 1
                 if self.currency == "USD"

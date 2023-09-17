@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from .StockInfoCache import StockInfoCache
 from .Fundamentus_Page import Fundamentus_Page
 
+from data import DataSchema
+
 
 @dataclass
 class DividendReader:
@@ -15,7 +17,7 @@ class DividendReader:
     cache_file: str = "debug/cache_dividends.tsv"
 
     def __post_init__(self):
-        self.df = pd.DataFrame(columns=["SYMBOL", "PRICE", "PAYDATE", "OPERATION"])
+        self.df = pd.DataFrame(columns=[DataSchema.SYMBOL, DataSchema.PRICE, DataSchema.PAYDATE, DataSchema.OPERATION])
         self.cache = StockInfoCache(self.cache_file)
 
     def load(self):
@@ -31,16 +33,20 @@ class DividendReader:
                 tmp = self.loadData(self.us_tickers, "stock")
                 self.df = tmp if self.df.empty else pd.concat([self.df, tmp])
 
-            self.df = self.cache.merge(self.df, sortby=["DATE", "SYMBOL"], on=["SYMBOL", "DATE", "OPERATION"])
+            self.df = self.cache.merge(
+                self.df,
+                sortby=[DataSchema.DATE, DataSchema.SYMBOL],
+                on=[DataSchema.SYMBOL, DataSchema.DATE, DataSchema.OPERATION],
+            )
         else:
             self.df = self.cache.load_data()
-            self.df["PAYDATE"] = pd.to_datetime(self.df["PAYDATE"], format="%Y-%m-%d")
+            self.df[DataSchema.PAYDATE] = pd.to_datetime(self.df[DataSchema.PAYDATE], format="%Y-%m-%d")
 
         if not self.df.empty:
-            self.df.set_index("DATE", inplace=True)
-            self.df["PRICE"] -= self.df["TAX"]
-            self.df["OPERATION"] = self.df["OPERATION"].map(lambda x: "D" if x == "JCP" else x)
-            self.df = self.df[["SYMBOL", "PRICE", "PAYDATE", "OPERATION"]]
+            self.df.set_index(DataSchema.DATE, inplace=True)
+            self.df[DataSchema.PRICE] -= self.df["TAX"]
+            self.df[DataSchema.OPERATION] = self.df[DataSchema.OPERATION].map(lambda x: "D" if x == "JCP" else x)
+            self.df = self.df[[DataSchema.SYMBOL, DataSchema.PRICE, DataSchema.PAYDATE, DataSchema.OPERATION]]
 
     def loadData(self, paperList, type):
         tb = pd.DataFrame()
@@ -53,20 +59,24 @@ class DividendReader:
                 continue
 
             # print(rawTable)
-            rawTable["SYMBOL"] = paper
+            rawTable[DataSchema.SYMBOL] = paper
 
             # Discount a tax of 15% when is JCP (Juros sobre capital proprio)
-            rawTable["TAX"] = np.where(rawTable["OPERATION"] == "JCP", rawTable["PRICE"] * 0.15, 0)
+            rawTable["TAX"] = np.where(rawTable[DataSchema.OPERATION] == "JCP", rawTable[DataSchema.PRICE] * 0.15, 0)
 
-            rawTable["PAYDATE"] = np.where(rawTable["PAYDATE"] == "-", rawTable["DATE"], rawTable["PAYDATE"])
-            rawTable["PAYDATE"] = pd.to_datetime(rawTable["PAYDATE"], format="%d-%m-%Y")
-            rawTable["DATE"] = pd.to_datetime(rawTable["DATE"], format="%d-%m-%Y")
-            rawTable = rawTable[["SYMBOL", "DATE", "PRICE", "PAYDATE", "OPERATION", "TAX"]]
+            rawTable[DataSchema.PAYDATE] = np.where(
+                rawTable[DataSchema.PAYDATE] == "-", rawTable[DataSchema.DATE], rawTable[DataSchema.PAYDATE]
+            )
+            rawTable[DataSchema.PAYDATE] = pd.to_datetime(rawTable[DataSchema.PAYDATE], format="%d-%m-%Y")
+            rawTable[DataSchema.DATE] = pd.to_datetime(rawTable[DataSchema.DATE], format="%d-%m-%Y")
+            rawTable = rawTable[
+                [DataSchema.SYMBOL, DataSchema.DATE, DataSchema.PRICE, DataSchema.PAYDATE, DataSchema.OPERATION, "TAX"]
+            ]
 
             tb = pd.concat([tb, rawTable])
         # print(tb)
-        return tb[tb["DATE"] >= self.start_date]
+        return tb[tb[DataSchema.DATE] >= self.start_date]
 
     def getPeriod(self, paper, fromDate, toDate):
-        filtered = self.df[self.df["SYMBOL"] == paper].loc[fromDate:toDate]
-        return filtered[["SYMBOL", "PRICE", "PAYDATE", "OPERATION"]]
+        filtered = self.df[self.df[DataSchema.SYMBOL] == paper].loc[fromDate:toDate]
+        return filtered[[DataSchema.SYMBOL, DataSchema.PRICE, DataSchema.PAYDATE, DataSchema.OPERATION]]

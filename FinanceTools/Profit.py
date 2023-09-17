@@ -1,6 +1,8 @@
 # Class to calculate the profit or loss considering day trade rules.
 import pandas as pd
 
+from data import DataSchema
+
 
 class Profit:
     pm = amount = 0
@@ -15,8 +17,8 @@ class Profit:
             amount = self.amount - row.QUANTITY
 
         self.amount = amount
-        row["Profit"] = profit
-        row["DayTrade"] = 1
+        row[DataSchema.PROFIT] = profit
+        row[DataSchema.DAYTRADE] = 1
         return row
 
     def Trade(self, dayGroup):
@@ -27,12 +29,12 @@ class Profit:
         purchaseCount = len(purchaseDf)
 
         if sellCount == 0:
-            dayGroup["Profit"] = dayGroup["DayTrade"] = 0
+            dayGroup[DataSchema.PROFIT] = dayGroup[DataSchema.DAYTRADE] = 0
             return dayGroup
 
         if purchaseCount == 0:
-            dayGroup["Profit"] = ((dayGroup.PRICE - dayGroup.PM) * -dayGroup.QUANTITY) - dayGroup.FEE
-            dayGroup["DayTrade"] = 0
+            dayGroup[DataSchema.PROFIT] = ((dayGroup.PRICE - dayGroup.PM) * -dayGroup.QUANTITY) - dayGroup.FEE
+            dayGroup[DataSchema.DAYTRADE] = 0
             return dayGroup
 
         # Day trade detected

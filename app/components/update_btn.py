@@ -1,9 +1,7 @@
 from dash import Dash, dcc, html
 from dash.dependencies import Input, Output
 
-import dash_bootstrap_components as dbc
 from . import ids
-import subprocess
 
 
 def render(app: Dash, configs) -> html.Div:

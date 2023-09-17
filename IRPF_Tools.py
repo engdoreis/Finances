@@ -15,7 +15,7 @@ http_header = {
 class ProcessedOrders:
     def __init__(self, file):
         self.dFrame = pd.read_csv(file, sep="\t")
-        self.dFrame["DATE"] = pd.to_datetime(self.dFrame["DATE"], format="%Y/%m/%d")
+        self.dFrame[DataSchema.DATE] = pd.to_datetime(self.dFrame[DataSchema.DATE], format="%Y/%m/%d")
 
     def import_df(self):
         return self.dFrame
@@ -31,7 +31,9 @@ class Taxation:
         self.stockTaxFreeMonth = stockTaxFreeMonth
 
     def calcStockTaxes(self, dataframe):
-        tax = np.where(dataframe["AMOUNT"] > self.stockTaxFreeMonth, dataframe["Profit"] * self.stockTaxRate, 0)
+        tax = np.where(
+            dataframe[DataSchema.AMOUNT] > self.stockTaxFreeMonth, dataframe[DataSchema.PROFIT] * self.stockTaxRate, 0
+        )
         dataframe["Tax"] = np.where(tax > 0, tax, 0)
 
     def calcFiiTaxes(self, dataframe):
@@ -44,26 +46,37 @@ class Taxation:
 
     def DayTrade(self, stockType):
         # Filter by stockType and get the year list
-        dayTrade = self.df[(self.df["DayTrade"] == 1) & (self.df["TYPE"] == stockType)]
-        dayTrade = dayTrade.groupby(["SYMBOL", "DATE"]).agg({"AMOUNT": "sum", "Profit": "sum"}).reset_index()
-        dayTrade["Year"] = pd.DatetimeIndex(dayTrade["DATE"]).year
-        dayTrade["Month"] = pd.DatetimeIndex(dayTrade["DATE"]).month_name()
-        dayTrade = dayTrade[["Month", "Profit", "Year"]]
+        dayTrade = self.df[(self.df[DataSchema.DAYTRADE] == 1) & (self.df[DataSchema.TYPE] == stockType)]
+        dayTrade = (
+            dayTrade.groupby([DataSchema.SYMBOL, DataSchema.DATE])
+            .agg({DataSchema.AMOUNT: "sum", DataSchema.PROFIT: "sum"})
+            .reset_index()
+        )
+        dayTrade[DataSchema.YEAR] = pd.DatetimeIndex(dayTrade[DataSchema.DATE]).year
+        dayTrade[DataSchema.MONTH] = pd.DatetimeIndex(dayTrade[DataSchema.DATE]).month_name()
+        dayTrade = dayTrade[[DataSchema.MONTH, DataSchema.PROFIT, DataSchema.YEAR]]
         return dayTrade
 
     def SwingTrade(self, stockType):
-        swingTrade = pd.DataFrame(columns=["Month", "Profit"])
+        swingTrade = pd.DataFrame(columns=[DataSchema.MONTH, DataSchema.PROFIT])
         # Filter by stockType and get the year list
         typeDF = self.df[
-            (self.df["DayTrade"] == 0) & (self.df["TYPE"] == stockType) & (self.df["OPERATION"].isin(["S"]))
+            (self.df[DataSchema.DAYTRADE] == 0)
+            & (self.df[DataSchema.TYPE] == stockType)
+            & (self.df[DataSchema.OPERATION].isin(["S"]))
         ].copy(deep=True)
-        typeDF["AMOUNT"] = typeDF["AMOUNT"].abs()
+        typeDF[DataSchema.AMOUNT] = typeDF[DataSchema.AMOUNT].abs()
         years = typeDF.Year.unique()
         for year in years:
             # Calculate the Profit/Loss by month in the current year
-            res = typeDF[typeDF.Year == year].groupby(["Month"]).agg({"AMOUNT": "sum", "Profit": "sum"}).reset_index()
+            res = (
+                typeDF[typeDF.Year == year]
+                .groupby([DataSchema.MONTH])
+                .agg({DataSchema.AMOUNT: "sum", DataSchema.PROFIT: "sum"})
+                .reset_index()
+            )
             # Sort the table by the month name
-            res["Year"] = year
+            res[DataSchema.YEAR] = year
             res["m"] = pd.to_datetime(res.Month, format="%B").dt.month
             res.set_index("m", inplace=True)
             res.sort_index(inplace=True)
@@ -71,11 +84,11 @@ class Taxation:
             res.reset_index(drop=True, inplace=True)
             swingTrade = pd.concat([swingTrade, res], axis=0)
 
-        swingTrade["Year"] = swingTrade["Year"].astype(int)
+        swingTrade[DataSchema.YEAR] = swingTrade[DataSchema.YEAR].astype(int)
         return swingTrade
 
     def Process(self, stockType="FII"):
-        if not self.df["TYPE"].str.contains(stockType).any():
+        if not self.df[DataSchema.TYPE].str.contains(stockType).any():
             return
 
         taxDF = self.SwingTrade(stockType)
@@ -97,7 +110,7 @@ class Taxation:
         acumLoss.set_index("Index", inplace=True)
         newDF = pd.concat([newDF, acumLoss["AcumLoss"]], axis=1)
 
-        taxable = newDF["Profit"] + newDF["AcumLoss"].shift(1, fill_value=0)
+        taxable = newDF[DataSchema.PROFIT] + newDF["AcumLoss"].shift(1, fill_value=0)
         newDF["Taxable"] = np.where(taxable > 0, taxable, 0)
         if isDaytrade:
             self.calcDaytradeTaxes(newDF)
@@ -106,7 +119,7 @@ class Taxation:
         else:
             self.calcStockTaxes(newDF)
 
-        newDF.set_index(["Year", "Month"], inplace=True)
+        newDF.set_index([DataSchema.YEAR, DataSchema.MONTH], inplace=True)
         # display(newDF)
         return newDF
         # print( '\n')
@@ -116,43 +129,49 @@ class Taxation:
 class IRPF_BensDireitos:
     def __init__(self, file, cache="debug/CNPJ_caching.tsv"):
         dFrame = ProcessedOrders(file).import_df()
-        dFrame = dFrame[dFrame["OPERATION"].isin(["B", "S", "SPLIT", "C"])]
+        dFrame = dFrame[dFrame[DataSchema.OPERATION].isin(["B", "S", "SPLIT", "C"])]
 
         self.dtframe = pd.DataFrame()
-        for year in dFrame["DATE"].dt.year.unique():
-            tmp = dFrame[dFrame["DATE"] < f"{year}-12-31"]
+        for year in dFrame[DataSchema.DATE].dt.year.unique():
+            tmp = dFrame[dFrame[DataSchema.DATE] < f"{year}-12-31"]
 
-            tmp.sort_values(["PAYDATE", "OPERATION"], ascending=[True, False], inplace=True)
+            tmp.sort_values([DataSchema.PAYDATE, DataSchema.OPERATION], ascending=[True, False], inplace=True)
             tmp = tmp.apply(TableAccumulator().Cash, axis=1)
-            cash = tmp.iloc[-1]["CASH"]
-            cash_brl = tmp.iloc[-1]["PM_BRL"]
-            tmp = tmp[tmp["SYMBOL"] != "CASH"]
+            cash = tmp.iloc[-1][DataSchema.CASH]
+            cash_brl = tmp.iloc[-1][DataSchema.PM_BRL]
+            tmp = tmp[tmp[DataSchema.SYMBOL] != DataSchema.CASH]
 
-            tmp = tmp.groupby(["SYMBOL"]).apply(lambda x: x.tail(1))
-            tmp = tmp[["SYMBOL", "PM", "acum_qty", "acumProv", "PM_BRL"]]
+            tmp = tmp.groupby([DataSchema.SYMBOL]).apply(lambda x: x.tail(1))
+            tmp = tmp[[DataSchema.SYMBOL, DataSchema.PM, DataSchema.QTY_ACUM, DataSchema.DIV_ACUM, DataSchema.PM_BRL]]
             # print(tmp)
-            tmp.columns = ["SYMBOL", "COST", "QUANTITY", "DIVIDENDS", "COST_BRL"]
-            tmp["COST"] *= tmp["QUANTITY"]
-            tmp["COST_BRL"] *= tmp["QUANTITY"]
+            tmp.columns = [DataSchema.SYMBOL, "COST", DataSchema.QTY, "DIVIDENDS", "COST_BRL"]
+            tmp["COST"] *= tmp[DataSchema.QUANTITY]
+            tmp["COST_BRL"] *= tmp[DataSchema.QUANTITY]
             tmp.reset_index(inplace=True, drop=True)
             # print(tmp)
-            tmp = tmp[tmp["QUANTITY"] > 0]
+            tmp = tmp[tmp[DataSchema.QUANTITY] > 0]
 
-            newLine = {"SYMBOL": "CASH", "COST": cash, "QUANTITY": 1, "DIVIDENDS": 0, "COST_BRL": cash_brl}
+            newLine = {
+                DataSchema.SYMBOL: DataSchema.CASH,
+                "COST": cash,
+                DataSchema.QTY: 1,
+                "DIVIDENDS": 0,
+                "COST_BRL": cash_brl,
+            }
             tmp = pd.concat([tmp, pd.DataFrame(newLine, index=[0])])
 
-            tmp = tmp[["SYMBOL", "QUANTITY", "COST", "COST_BRL"]].set_index("SYMBOL")
+            tmp = tmp[[DataSchema.SYMBOL, DataSchema.QTY, "COST", "COST_BRL"]].set_index(DataSchema.SYMBOL)
 
             tmp.columns = pd.MultiIndex.from_product([[f"{year}-12-31"], tmp.columns])
             self.dtframe = pd.concat([self.dtframe, tmp], axis=1)
             # print(self.dtframe)
         self.dtframe = self.dtframe.replace([np.inf, -np.inf], np.nan).fillna(0)
-        self.ticker_list = dFrame.drop_duplicates("SYMBOL")[["SYMBOL", "TYPE"]]
-        self.ticker_list = self.ticker_list[self.ticker_list["SYMBOL"].isin(self.dtframe.index)]
+        self.ticker_list = dFrame.drop_duplicates(DataSchema.SYMBOL)[[DataSchema.SYMBOL, DataSchema.TYPE]]
+        self.ticker_list = self.ticker_list[self.ticker_list[DataSchema.SYMBOL].isin(self.dtframe.index)]
         self.cache = Caching(cache)
 
     def load(self):
-        for index, type in zip(self.ticker_list["SYMBOL"], self.ticker_list["TYPE"]):
+        for index, type in zip(self.ticker_list[DataSchema.SYMBOL], self.ticker_list[DataSchema.TYPE]):
             self.dtframe.loc[index, "CNPJ"] = self.get_cnpj(index, type)
             self.dtframe.loc[index, "DESC"] = (
                 "Corretora " + ("TD Ametridade" if type == "STOCK" else "Clear") + f" - {type} - {index} x "
@@ -166,7 +185,7 @@ class IRPF_BensDireitos:
         else:
             res = self.dtframe[[from_date, to_date, "CNPJ", "DESC"]]
 
-        res = res[(res[to_date, "QUANTITY"] > 0) | (res[from_date, "QUANTITY"] > 0)]
+        res = res[(res[to_date, DataSchema.QTY] > 0) | (res[from_date, DataSchema.QTY] > 0)]
 
         currency = "BRL"
         if (res[to_date, "COST"] != res[to_date, "COST_BRL"]).any():
@@ -174,7 +193,7 @@ class IRPF_BensDireitos:
             res.columns.drop(["CNPJ"])
 
         res["DESC"] += (
-            res[to_date, "QUANTITY"].astype(int).astype(str)
+            res[to_date, DataSchema.QTY].astype(int).astype(str)
             + f" = {currency} "
             + res[to_date, "COST"].round(2).astype(str)
         )
@@ -184,12 +203,14 @@ class IRPF_BensDireitos:
         tmp_df = self.cache.get_data()
         if tmp_df.empty:
             return None
-        if not tmp_df["SYMBOL"].isin([symbol]).any():
+        if not tmp_df[DataSchema.SYMBOL].isin([symbol]).any():
             return None
-        return tmp_df[tmp_df["SYMBOL"] == symbol].iloc[0]["CNPJ"]
+        return tmp_df[tmp_df[DataSchema.SYMBOL] == symbol].iloc[0]["CNPJ"]
 
     def add_cnpj_to_cache(self, symbol, cnpj, name, type):
-        self.cache.append(pd.DataFrame({"SYMBOL": [symbol], "CNPJ": [cnpj], "NAME": [name], "TYPE": [type]}))
+        self.cache.append(
+            pd.DataFrame({DataSchema.SYMBOL: [symbol], "CNPJ": [cnpj], "NAME": [name], DataSchema.TYPE: [type]})
+        )
 
     def get_last_year(self, exchange_rate=1.0):
         return self.filter_by_year(int(dt.datetime.today().strftime("%Y")) - 1)
@@ -235,7 +256,7 @@ class IRPF_BensDireitos:
         years = fdf.columns.get_level_values(0).unique()[:-1]
         format = {}
         for year in years:
-            case = {(year, "QUANTITY"): "{:>n}", (year, "COST"): "{:.2f}", (year, "COST_BRL"): "{:.2f}"}
+            case = {(year, DataSchema.QTY): "{:>n}", (year, "COST"): "{:.2f}", (year, "COST_BRL"): "{:.2f}"}
             format.update(case)
 
         return fdf.style.format(format, decimal=",")

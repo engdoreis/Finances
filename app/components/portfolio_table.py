@@ -3,6 +3,7 @@ from dash.dependencies import Input, Output
 from dash.dash_table import FormatTemplate
 from dash.dash_table.Format import Format, Scheme
 
+from data import DataSchema
 from . import ids
 
 
@@ -19,10 +20,10 @@ def render(app: Dash, configs) -> html.Div:
         pct_fmt = FormatTemplate.percentage(1)
         fixed_fmt = Format(precision=1, scheme=Scheme.fixed)
         columns = [
-            dict(id="SYMBOL", name="Ticker", type="text"),
-            dict(id="PM", name="Average", type="numeric", format=money_fmt),
-            dict(id="PRICE", name="Price", type="numeric", format=money_fmt),
-            dict(id="QUANTITY", name="Qty", type="numeric", format=fixed_fmt),
+            dict(id=DataSchema.SYMBOL, name="Ticker", type="text"),
+            dict(id=DataSchema.AVERAGE_PRICE, name="Average", type="numeric", format=money_fmt),
+            dict(id=DataSchema.PRICE, name="Price", type="numeric", format=money_fmt),
+            dict(id=DataSchema.QTY, name="Qty", type="numeric", format=fixed_fmt),
             dict(id="COST", name="Cost", type="numeric", format=money_fmt),
             dict(id="MKT_VALUE", name="Value", type="numeric", format=money_fmt),
             dict(id="DIVIDENDS", name="Dividends", type="numeric", format=money_fmt),
@@ -77,7 +78,7 @@ def render(app: Dash, configs) -> html.Div:
                     style_data_conditional=styles,
                     style_cell_conditional=[
                         {
-                            "if": {"column_id": "SYMBOL"},
+                            "if": {"column_id": DataSchema.SYMBOL},
                             "backgroundColor": "#0074D9",  # Header background color
                             "font_size": "15px",
                             "fontWeight": "bold",

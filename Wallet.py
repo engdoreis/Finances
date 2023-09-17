@@ -6,6 +6,7 @@ from enum import Enum
 
 import numpy as np
 import pandas as pd
+from data import DataSchema
 
 from BroakerParser import ClearDivStatement, ReadOrders, TDAmeritrade, Trading212
 from FinanceTools import (
@@ -85,43 +86,48 @@ class Wallet:
             broker.read_statement(self.input.statement_dir)
             self.df = pd.read_csv(csv)
 
-        self.df = self.df.iloc[:, :7]
-        self.df.columns = ["SYMBOL", "DATE", "PRICE", "QUANTITY", "OPERATION", "TYPE", "FEE"]
+        DataSchema.assert_base_columns(self.df)
+        self.df = self.df.iloc[:, : len(DataSchema.base_columns())]
+        self.df.columns = DataSchema.base_columns()
 
         # drop empty lines
-        self.df = self.df[self.df["DATE"].astype(bool)].dropna()
+        self.df = self.df[self.df[DataSchema.DATE].astype(bool)].dropna()
 
         if self.input.broker == Broker.CLEAR:
-            self.brTickers = np.sort(self.df[self.df["TYPE"].isin(["Ação"])]["SYMBOL"].unique()).tolist()
-            self.fiiTickers = np.sort(self.df[self.df["TYPE"] == "FII"]["SYMBOL"].unique()).tolist()
+            self.brTickers = np.sort(
+                self.df[self.df[DataSchema.TYPE].isin(["Ação"])][DataSchema.SYMBOL].unique()
+            ).tolist()
+            self.fiiTickers = np.sort(self.df[self.df[DataSchema.TYPE] == "FII"][DataSchema.SYMBOL].unique()).tolist()
             self.usTickers = []
         else:
             self.brTickers = []
             self.fiiTickers = []
-            self.usTickers = np.sort(self.df[self.df["TYPE"].isin(["STOCK", "REIT"])]["SYMBOL"].unique()).tolist()
+            self.usTickers = np.sort(
+                self.df[self.df[DataSchema.TYPE].isin(["STOCK", "REIT"])][DataSchema.SYMBOL].unique()
+            ).tolist()
 
-        if self.df["PRICE"].apply(type).eq(str).any():
-            self.df["PRICE"] = self.df["PRICE"].str.replace(",", "")
-            self.df["PRICE"] = pd.to_numeric(self.df["PRICE"], errors="coerce")
-            self.df["QUANTITY"] = pd.to_numeric(self.df["QUANTITY"], errors="coerce")
-            self.df["FEE"] = pd.to_numeric(self.df["FEE"], errors="coerce")
+        if self.df[DataSchema.PRICE].apply(type).eq(str).any():
+            self.df[DataSchema.PRICE] = self.df[DataSchema.PRICE].str.replace(",", "")
+            self.df[DataSchema.PRICE] = pd.to_numeric(self.df[DataSchema.PRICE], errors="coerce")
+            self.df[DataSchema.QTY] = pd.to_numeric(self.df[DataSchema.QTY], errors="coerce")
+            self.df[DataSchema.FEES] = pd.to_numeric(self.df[DataSchema.FEES], errors="coerce")
 
-        if self.df["DATE"].apply(type).eq(str).any():
-            self.df["DATE"] = self.df.DATE.str.replace("-", "/")
-            self.df["DATE"] = pd.to_datetime(self.df["DATE"], format="%Y/%m/%d")
-        self.df["Year"] = pd.DatetimeIndex(self.df["DATE"]).year
-        self.df["Month"] = pd.DatetimeIndex(self.df["DATE"]).month_name()
+        if self.df[DataSchema.DATE].apply(type).eq(str).any():
+            self.df[DataSchema.DATE] = self.df.DATE.str.replace("-", "/")
+            self.df[DataSchema.DATE] = pd.to_datetime(self.df[DataSchema.DATE], format="%Y/%m/%d")
+        self.df[DataSchema.YEAR] = pd.DatetimeIndex(self.df[DataSchema.DATE]).year
+        self.df[DataSchema.MONTH] = pd.DatetimeIndex(self.df[DataSchema.DATE]).month_name()
 
         # Sort the table by date and Type and reset index numeration
-        self.df.sort_values(by=["DATE", "OPERATION"], ascending=[True, True], inplace=True)
+        self.df.sort_values(by=[DataSchema.DATE, DataSchema.OPERATION], ascending=[True, True], inplace=True)
         self.df.reset_index(drop=True, inplace=True)
 
         # turn all sell amount negative
-        self.df.loc[self.df.OPERATION == "S", ["QUANTITY"]] *= -1
+        self.df.loc[self.df.OPERATION == "S", [DataSchema.QTY]] *= -1
 
         # Get the oldest order date
-        self.start_date = self.df.iloc[0]["DATE"]
-        self.df["AMOUNT"] = self.df["PRICE"] * self.df["QUANTITY"]
+        self.start_date = self.df.iloc[0][DataSchema.DATE]
+        self.df[DataSchema.AMOUNT] = self.df[DataSchema.PRICE] * self.df[DataSchema.QTY]
 
     def load_statement(self):
         if self.input.broker == Broker.CLEAR:
@@ -138,7 +144,7 @@ class Wallet:
 
         div_start_date = self.start_date
         if not self.divStatement.empty:
-            div_start_date = self.divStatement.iloc[-1]["DATE"]
+            div_start_date = self.divStatement.iloc[-1][DataSchema.DATE]
 
         self.prcReader = PriceReader(self.brTickers + self.fiiTickers, self.usTickers, self.start_date)
         self.splReader = SplitsReader(self.brTickers, self.usTickers, self.start_date)
@@ -179,59 +185,61 @@ class Wallet:
 
     def merge_statement_data(self):
         if self.input.broker == Broker.CLEAR:
-            self.df["PAYDATE"] = self.df["DATE"]
+            self.df[DataSchema.PAYDATE] = self.df[DataSchema.DATE]
 
             def getType(symbol):
-                tmp = self.df[self.df.SYMBOL == symbol]
+                tmp = self.df[self.df[DataSchema.SYMBOL] == symbol]
                 if tmp.empty:
                     return symbol
-                return tmp.iloc[0]["TYPE"]
+                return tmp.iloc[0][DataSchema.TYPE]
 
             divTable = self.divStatement
-            divTable["TYPE"] = divTable["SYMBOL"].map(lambda x: getType(x))
-            divTable["FEE"] = 0
-            divTable["Year"] = pd.DatetimeIndex(divTable["DATE"]).year
-            divTable["Month"] = pd.DatetimeIndex(divTable["DATE"]).month_name()
-            divTable["AMOUNT"] = divTable["PRICE"] * divTable["QUANTITY"]
-            divTable = divTable.drop(columns="DESCRIPTION")
+            divTable[DataSchema.TYPE] = divTable[DataSchema.SYMBOL].map(lambda x: getType(x))
+            divTable[DataSchema.FEES] = 0
+            divTable[DataSchema.YEAR] = pd.DatetimeIndex(divTable[DataSchema.DATE]).year
+            divTable[DataSchema.MONTH] = pd.DatetimeIndex(divTable[DataSchema.DATE]).month_name()
+            divTable[DataSchema.AMOUNT] = divTable[DataSchema.PRICE] * divTable[DataSchema.QTY]
+            divTable = divTable.drop(columns=DataSchema.DESCRIPTION)
 
             self.df = pd.concat([self.df, divTable])
 
     def merge_external_data(self):
-        self.df["acum_qty"] = 0
-        self.df["PM"] = 0
-        self.df["CASH"] = 0
-        self.df["PAYDATE"] = self.df["DATE"]
+        self.df[DataSchema.QTY_ACUM] = 0
+        self.df[DataSchema.AVERAGE_PRICE] = 0
+        self.df[DataSchema.CASH] = 0
+        self.df[DataSchema.PAYDATE] = self.df[DataSchema.DATE]
         today = dt.datetime.today().strftime("%Y-%m-%d")
 
         for paper in self.brTickers + self.fiiTickers + self.usTickers:
-            paperTable = self.df[self.df.SYMBOL == paper]
-            fromDate = paperTable.iloc[0]["DATE"]
+            paperTable = self.df[self.df[DataSchema.SYMBOL] == paper]
+            fromDate = paperTable.iloc[0][DataSchema.DATE]
 
             divTable = self.divReader.getPeriod(paper, fromDate, today).reset_index()
             if not self.divStatement.empty:
-                divTable = divTable[pd.to_datetime(divTable.PAYDATE) > self.divStatement.iloc[-1]["DATE"]]
-            divTable["QUANTITY"] = 1
-            divTable["TYPE"] = paperTable.iloc[0]["TYPE"]
-            divTable["FEE"] = 0
-            divTable["Year"] = pd.DatetimeIndex(divTable["DATE"]).year
-            divTable["Month"] = pd.DatetimeIndex(divTable["DATE"]).month_name()
-            divTable["AMOUNT"] = 0
-            divTable["acum_qty"] = 0
-            divTable["CASH"] = 0
+                divTable = divTable[
+                    pd.to_datetime(divTable[DataSchema.PAYDATE]) > self.divStatement.iloc[-1][DataSchema.DATE]
+                ]
+            divTable[DataSchema.QTY] = 1
+            divTable[DataSchema.TYPE] = paperTable.iloc[0][DataSchema.TYPE]
+            divTable[DataSchema.FEES] = 0
+            divTable[DataSchema.YEAR] = pd.DatetimeIndex(divTable[DataSchema.DATE]).year
+            divTable[DataSchema.MONTH] = pd.DatetimeIndex(divTable[DataSchema.DATE]).month_name()
+            divTable[DataSchema.AMOUNT] = 0
+            divTable[DataSchema.QTY_ACUM] = 0
+            divTable[DataSchema.CASH] = 0
             self.df = pd.concat([self.df, divTable])
 
             splitTable = self.splReader.getPeriod(paper, fromDate, today).reset_index()
-            splitTable["PRICE"] = 0
-            splitTable["OPERATION"] = "SPLIT"
-            splitTable["TYPE"] = paperTable.iloc[0]["TYPE"]
-            splitTable["FEE"] = 0
-            splitTable["Year"] = pd.DatetimeIndex(splitTable["DATE"]).year
-            splitTable["Month"] = pd.DatetimeIndex(splitTable["DATE"]).month_name()
-            splitTable["AMOUNT"] = 0
-            splitTable["acum_qty"] = 0
-            splitTable["CASH"] = 0
-            splitTable["PAYDATE"] = splitTable["DATE"]
+            splitTable[DataSchema.PRICE] = 0
+            splitTable[DataSchema.OPERATION] = "SPLIT"
+            splitTable[DataSchema.TYPE] = paperTable.iloc[0][DataSchema.TYPE]
+            splitTable[DataSchema.FEES] = 0
+            splitTable[DataSchema.YEAR] = pd.DatetimeIndex(splitTable[DataSchema.DATE]).year
+            splitTable[DataSchema.MONTH] = pd.DatetimeIndex(splitTable[DataSchema.DATE]).month_name()
+            splitTable[DataSchema.AMOUNT] = 0
+            splitTable[DataSchema.QTY_ACUM] = 0
+            splitTable[DataSchema.CASH] = 0
+            splitTable[DataSchema.PAYDATE] = splitTable[DataSchema.DATE]
             self.df = pd.concat([self.df, splitTable])
 
     def compute_average_price(self):
@@ -258,58 +266,82 @@ class Wallet:
             "RRV": 6,
         }
 
-        self.df["OPERATION_ORDER"] = self.df["OPERATION"].map(lambda x: operation_order_map.get(x, 100))
-        self.df.sort_values(["DATE", "OPERATION_ORDER"], inplace=True)
+        self.df["OPERATION_ORDER"] = self.df[DataSchema.OPERATION].map(lambda x: operation_order_map.get(x, 100))
+        self.df.sort_values([DataSchema.DATE, "OPERATION_ORDER"], inplace=True)
         self.df = self.df.drop("OPERATION_ORDER", axis=1)
 
         # Calc the average price and rename the columns names
-        self.df = self.df.sort_values(["PAYDATE", "OPERATION"], ascending=[True, False])
+        self.df = self.df.sort_values([DataSchema.PAYDATE, DataSchema.OPERATION], ascending=[True, False])
         tab_accum = TableAccumulator(self.prcReader, self.currency.name)
         self.df = self.df.apply(tab_accum.Cash, axis=1).reset_index(drop=True)
 
-        self.df = self.df.groupby(["SYMBOL"], group_keys=False).apply(tab_accum.ByGroup).reset_index(drop=True)
+        self.df = self.df.groupby([DataSchema.SYMBOL], group_keys=False).apply(tab_accum.ByGroup).reset_index(drop=True)
 
     def compute_realized_profit(self):
         profit = Profit()
-        tmp = self.df.sort_values(by=["DATE", "OPERATION"], ascending=[True, True])
+        tmp = self.df.sort_values(by=[DataSchema.DATE, DataSchema.OPERATION], ascending=[True, True])
         tmp.reset_index(drop=True)
-        self.df = tmp.groupby(["SYMBOL", "DATE"], group_keys=False).apply(profit.Trade).reset_index(drop=True)
-        self.df.sort_values(["PAYDATE", "OPERATION"], ascending=[True, False]).to_csv(
+        self.df = (
+            tmp.groupby([DataSchema.SYMBOL, DataSchema.DATE], group_keys=False)
+            .apply(profit.Trade)
+            .reset_index(drop=True)
+        )
+        self.df.sort_values([DataSchema.PAYDATE, DataSchema.OPERATION], ascending=[True, False]).to_csv(
             f"debug/df_log_{self.input.broker}.tsv", sep="\t"
         )
 
         rl = self.df[self.df.OPERATION == "S"][
-            ["DATE", "SYMBOL", "TYPE", "AMOUNT", "Profit", "DayTrade", "Month", "Year"]
+            [
+                DataSchema.DATE,
+                DataSchema.SYMBOL,
+                DataSchema.TYPE,
+                DataSchema.AMOUNT,
+                DataSchema.PROFIT,
+                DataSchema.DAYTRADE,
+                DataSchema.MONTH,
+                DataSchema.YEAR,
+            ]
         ]
-        rl1 = rl[["DATE", "SYMBOL", "TYPE", "AMOUNT", "Profit", "DayTrade"]].copy(deep=True)
-        rl1["DATE"] = rl1["DATE"].apply(lambda x: x.strftime("%Y-%m-%d"))
-        rl1 = rl1.groupby(["DATE", "SYMBOL", "TYPE"]).sum().reset_index()
-        rl1.loc["Total", "Profit"] = rl["Profit"].sum()
-        rl1["AMOUNT"] = rl1["AMOUNT"].abs()
-        rl1.loc["Total", "AMOUNT"] = 0
+        rl1 = rl[
+            [
+                DataSchema.DATE,
+                DataSchema.SYMBOL,
+                DataSchema.TYPE,
+                DataSchema.AMOUNT,
+                DataSchema.PROFIT,
+                DataSchema.DAYTRADE,
+            ]
+        ].copy(deep=True)
+        rl1[DataSchema.DATE] = rl1[DataSchema.DATE].apply(lambda x: x.strftime("%Y-%m-%d"))
+        rl1 = rl1.groupby([DataSchema.DATE, DataSchema.SYMBOL, DataSchema.TYPE]).sum().reset_index()
+        rl1.loc["Total", DataSchema.PROFIT] = rl[DataSchema.PROFIT].sum()
+        rl1[DataSchema.AMOUNT] = rl1[DataSchema.AMOUNT].abs()
+        rl1.loc["Total", DataSchema.AMOUNT] = 0
         rl1 = rl1.fillna(" ").reset_index(drop=True)
-        self.realized_profit_df = rl1.style.applymap(Color().color_negative_red, subset=["Profit", "AMOUNT"]).format(
+        self.realized_profit_df = rl1.style.applymap(
+            Color().color_negative_red, subset=[DataSchema.PROFIT, DataSchema.AMOUNT]
+        ).format(
             {
-                "AMOUNT": f"{self.currency.symbol} {{:,.2f}}",
-                "Profit": f"{self.currency.symbol} {{:,.2f}}",
-                "DayTrade": "{}",
+                DataSchema.AMOUNT: f"{self.currency.symbol} {{:,.2f}}",
+                DataSchema.PROFIT: f"{self.currency.symbol} {{:,.2f}}",
+                DataSchema.DAYTRADE: "{}",
             }
         )
 
-        rl1 = rl.groupby("SYMBOL").Profit.sum().reset_index()
-        rl1.loc["Total", "Profit"] = rl1["Profit"].sum()
+        rl1 = rl.groupby(DataSchema.SYMBOL).Profit.sum().reset_index()
+        rl1.loc["Total", DataSchema.PROFIT] = rl1[DataSchema.PROFIT].sum()
         rl1 = rl1.fillna(" ").reset_index(drop=True)
-        self.realized_profit_by_symbol_df = rl1.style.applymap(Color().color_negative_red, subset=["Profit"]).format(
-            {"Profit": f"{self.currency.symbol} {{:,.2f}}"}
-        )
+        self.realized_profit_by_symbol_df = rl1.style.applymap(
+            Color().color_negative_red, subset=[DataSchema.PROFIT]
+        ).format({DataSchema.PROFIT: f"{self.currency.symbol} {{:,.2f}}"})
 
         def Pivot(tb):
             if tb.empty:
                 return pd.DataFrame()
             pvt = tb.pivot_table(
-                index="Year",
-                columns="Month",
-                values="Profit",
+                index=DataSchema.YEAR,
+                columns=DataSchema.MONTH,
+                values=DataSchema.PROFIT,
                 margins=True,
                 margins_name="Total",
                 aggfunc="sum",
@@ -322,8 +354,8 @@ class Wallet:
 
         if not rl.empty:
             self.realized_profit_pivot_all = Pivot(rl)
-            self.realized_profit_pivot_stock = Pivot(rl[rl["TYPE"] != "FII"])
-            self.realized_profit_pivot_fii = Pivot(rl[rl["TYPE"] == "FII"])
+            self.realized_profit_pivot_stock = Pivot(rl[rl[DataSchema.TYPE] != "FII"])
+            self.realized_profit_pivot_fii = Pivot(rl[rl[DataSchema.TYPE] == "FII"])
 
     def compute_portfolio(self):
         today = dt.datetime.today().strftime("%Y-%m-%d")
@@ -352,38 +384,40 @@ class Wallet:
 
             m = int(date.strftime("%m"))
             y = int(date.strftime("%Y"))
-            prov_df = self.df[(self.df["PAYDATE"].dt.month == m) & (self.df["PAYDATE"].dt.year == y)]
+            prov_df = self.df[(self.df[DataSchema.PAYDATE].dt.month == m) & (self.df[DataSchema.PAYDATE].dt.year == y)]
             if prov_df.empty:
                 continue
 
-            prov_month = prov_df[prov_df["OPERATION"].isin("D R JCP A".split())].copy(deep=True)
+            prov_month = prov_df[prov_df[DataSchema.OPERATION].isin("D R JCP A".split())].copy(deep=True)
             if prov_month.empty:
-                prov_month = prov_df[prov_df["OPERATION"].isin("D1 R1 JCP1 A1".split())].copy(deep=True)
+                prov_month = prov_df[prov_df[DataSchema.OPERATION].isin("D1 R1 JCP1 A1".split())].copy(deep=True)
 
             if prov_month.empty:
                 continue
 
-            prov_month = prov_month[["PAYDATE", "SYMBOL", "AMOUNT"]]
-            prov_month.columns = ["DATE", "SYMBOL", self.currency.name]
-            prov_month = prov_month.groupby(["SYMBOL", "DATE"])[self.currency.name].sum().reset_index()
-            prov_month.sort_values("DATE", inplace=True)
-            prov_month["DATE"] = prov_month["DATE"].apply(lambda x: x.strftime("%Y-%m-%d"))
+            prov_month = prov_month[[DataSchema.PAYDATE, DataSchema.SYMBOL, DataSchema.AMOUNT]]
+            prov_month.columns = [DataSchema.DATE, DataSchema.SYMBOL, self.currency.name]
+            prov_month = (
+                prov_month.groupby([DataSchema.SYMBOL, DataSchema.DATE])[self.currency.name].sum().reset_index()
+            )
+            prov_month.sort_values(DataSchema.DATE, inplace=True)
+            prov_month[DataSchema.DATE] = prov_month[DataSchema.DATE].apply(lambda x: x.strftime("%Y-%m-%d"))
             prov_month.loc["Total", self.currency.name] = prov_month[self.currency.name].sum()
-            prov_month["MONTH"] = date.strftime("%B")
+            prov_month[DataSchema.MONTH] = date.strftime("%B")
             self.prov_month = pd.concat([self.prov_month, prov_month.fillna(" ").reset_index(drop=True)])
 
         if not self.prov_month.empty:
-            self.prov_month.set_index(["MONTH", "SYMBOL"], inplace=True)
+            self.prov_month.set_index([DataSchema.MONTH, DataSchema.SYMBOL], inplace=True)
 
-        prov = self.df[self.df["OPERATION"].isin("D1 R1 JCP1 A1".split())]
+        prov = self.df[self.df[DataSchema.OPERATION].isin("D1 R1 JCP1 A1".split())]
         if prov.empty:
-            prov = self.df[self.df["OPERATION"].isin("D R JCP A".split())]
+            prov = self.df[self.df[DataSchema.OPERATION].isin("D R JCP A".split())]
 
         if not prov.empty:
             pvt = prov.pivot_table(
-                index="Year",
-                columns="Month",
-                values="AMOUNT",
+                index=DataSchema.YEAR,
+                columns=DataSchema.MONTH,
+                values=DataSchema.AMOUNT,
                 margins=True,
                 margins_name="Total",
                 aggfunc="sum",
@@ -442,7 +476,7 @@ class Wallet:
                 "Date",
                 "Equity",
                 "Cost",
-                "Profit",
+                DataSchema.PROFIT,
                 "Div",
                 "paperProfit",
                 "TotalProfit",
@@ -494,7 +528,13 @@ class Wallet:
         barsDf = histProfDF[:-1]
         ax[1].bar(barsDf.Date - shift, barsDf["Equity"], width, label="Equity")
         ax[1].bar(barsDf.Date - shift, barsDf["Div"], width, bottom=barsDf["Equity"], label="Div")
-        ax[1].bar(barsDf.Date - shift, barsDf["Profit"], width, bottom=barsDf["Div"] + barsDf["Equity"], label="Profit")
+        ax[1].bar(
+            barsDf.Date - shift,
+            barsDf[DataSchema.PROFIT],
+            width,
+            bottom=barsDf["Div"] + barsDf["Equity"],
+            label=DataSchema.PROFIT,
+        )
         ax[1].bar(barsDf.Date + shift, barsDf["Cost"], width, label="Cost")
         ax[1].legend()
         ax[1].set_ylabel(self.currency.symbol)

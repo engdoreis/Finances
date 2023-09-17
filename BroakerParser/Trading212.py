@@ -20,40 +20,57 @@ class Trading212(Broaker):
             df = pd.read_csv(file)
 
             df = df.apply(isin_process, axis=1)
-            df["TYPE"] = "STOCK"
+            df[DataSchema.TYPE] = "STOCK"
             # df["COMMISSION"] = 0
-            df["DATE"] = pd.to_datetime(df["Time"]).dt.strftime("%Y-%m-%d")
+            df[DataSchema.DATE] = pd.to_datetime(df["Time"]).dt.strftime("%Y-%m-%d")
             df = df[
                 [
                     "Ticker",
-                    "DATE",
+                    DataSchema.DATE,
                     "Price / share",
                     "No. of shares",
                     "Action",
-                    "TYPE",
+                    DataSchema.TYPE,
                     "Currency conversion fee",
                     "Total",
                 ]
             ]
-            df.columns = ["SYMBOL", "DATE", "PRICE", "QUANTITY", "Action", "TYPE", "COMMISSION", "AMOUNT"]
+            df.columns = [
+                DataSchema.SYMBOL,
+                DataSchema.DATE,
+                DataSchema.PRICE,
+                DataSchema.QTY,
+                "Action",
+                DataSchema.TYPE,
+                DataSchema.FEES,
+                DataSchema.AMOUNT,
+            ]
 
             df.fillna(0, inplace=True)
-            df["PRICE"] = df["AMOUNT"] / df["QUANTITY"]
+            df[DataSchema.PRICE] = df[DataSchema.AMOUNT] / df[DataSchema.QTY]
             df = df.apply(action_process, axis=1)
-            df = df.rename(columns={"Action": "OPERATION"})
+            df = df.rename(columns={"Action": DataSchema.OPERATION})
             if table.empty:
                 table = pd.concat([table, df])
             else:
                 table = table.merge(
                     df,
                     how="outer",
-                    on=["SYMBOL", "DATE", "PRICE", "QUANTITY", "OPERATION", "TYPE", "COMMISSION", "AMOUNT"],
+                    on=[
+                        DataSchema.SYMBOL,
+                        DataSchema.DATE,
+                        DataSchema.PRICE,
+                        DataSchema.QTY,
+                        DataSchema.OPERATION,
+                        DataSchema.TYPE,
+                        DataSchema.FEES,
+                        DataSchema.AMOUNT,
+                    ],
                     suffixes=["", "_"],
                     indicator=True,
                 )
                 table.drop(["_merge"], axis=1, inplace=True)
                 table = table.loc[:, ~table.columns.str.endswith("_")]
-
         table.to_csv(self.output, index=False)
 
 
@@ -78,20 +95,20 @@ def action_process(row):
         row["Action"] = "S"
     elif "dividend" in action:
         row["Action"] = "D1"
-        row["QUANTITY"] = 1
-        row["PRICE"] = row["AMOUNT"]
+        row[DataSchema.QTY] = 1
+        row[DataSchema.PRICE] = row[DataSchema.AMOUNT]
     elif "deposit" in action:
         row["Action"] = "C"
-        row["TYPE"] = "WIRE"
-        row["SYMBOL"] = "CASH"
-        row["QUANTITY"] = 1
-        row["PRICE"] = row["AMOUNT"]
+        row[DataSchema.TYPE] = "WIRE"
+        row[DataSchema.SYMBOL] = DataSchema.CASH
+        row[DataSchema.QTY] = 1
+        row[DataSchema.PRICE] = row[DataSchema.AMOUNT]
     elif "interest" in action:
         row["Action"] = "C"
-        row["TYPE"] = "INTEREST"
-        row["SYMBOL"] = "CASH"
-        row["QUANTITY"] = 1
-        row["PRICE"] = row["AMOUNT"]
+        row[DataSchema.TYPE] = "INTEREST"
+        row[DataSchema.SYMBOL] = DataSchema.CASH
+        row[DataSchema.QTY] = 1
+        row[DataSchema.PRICE] = row[DataSchema.AMOUNT]
     else:
         print(f'Action "{action}" is unknown.')
     return row

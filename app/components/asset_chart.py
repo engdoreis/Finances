@@ -1,7 +1,6 @@
 from dash import Dash, dcc, html
 from dash.dependencies import Input, Output
 import plotly.graph_objects as go
-from Wallet import Wallet
 from . import ids
 
 
@@ -15,8 +14,8 @@ def render(app: Dash, configs) -> html.Div:
         bar = go.Figure(
             data=[
                 go.Bar(x=df["Date"], y=df["Equity"], name="Equity", offsetgroup=1),
-                go.Bar(x=df["Date"], y=df["Profit"], name="Profit", base=df["Equity"], offsetgroup=1),
-                go.Bar(x=df["Date"], y=df["Div"], name="Div", base=df["Equity"] + df["Profit"], offsetgroup=1),
+                go.Bar(x=df["Date"], y=df[DataSchema.Profit], name=DataSchema.Profit, base=df["Equity"], offsetgroup=1),
+                go.Bar(x=df["Date"], y=df["Div"], name="Div", base=df["Equity"] + df[DataSchema.Profit], offsetgroup=1),
                 go.Bar(x=df.Date, y=df.Cost, name="Cost", offsetgroup=0),
             ]
         )

@@ -1,6 +1,7 @@
 import requests
 import pandas as pd
 
+from data import DataSchema
 
 http_header = {
     "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.75 Safari/537.36",
@@ -35,10 +36,10 @@ class ADVFN_Page:
 
         res.rename(
             columns={
-                "Tipo do Provento": "OPERATION",
-                "Data-Com": "DATE",
-                "Pagamento": "PAYDATE",
-                "Valor": "PRICE",
+                "Tipo do Provento": DataSchema.OPERATION,
+                "Data-Com": DataSchema.DATE,
+                "Pagamento": DataSchema.PAYDATE,
+                "Valor": DataSchema.PRICE,
                 "Dividend Yield": "YIELD",
             },
             inplace=True,
@@ -51,6 +52,6 @@ class ADVFN_Page:
             "RENDIMENTO": "D",
             "DESDOBRAMENTO": "SPLIT1",
         }
-        res["OPERATION"] = res["OPERATION"].map(lambda x: operation_map[x.upper()])
+        res[DataSchema.OPERATION] = res[DataSchema.OPERATION].map(lambda x: operation_map[x.upper()])
 
         return res

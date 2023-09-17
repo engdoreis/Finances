@@ -1,5 +1,7 @@
 import pandas as pd
 
+from data import DataSchema
+
 http_header = {
     "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.75 Safari/537.36",
     "X-Requested-With": "XMLHttpRequest",
@@ -35,11 +37,11 @@ class Fundamentus_Page:
 
         res.rename(
             columns={
-                "Tipo": "OPERATION",
-                "Data": "DATE",
-                "Data de Pagamento": "PAYDATE",
-                "Valor": "PRICE",
-                "Tipo": "OPERATION",
+                "Tipo": DataSchema.OPERATION,
+                "Data": DataSchema.DATE,
+                "Data de Pagamento": DataSchema.PAYDATE,
+                "Valor": DataSchema.PRICE,
+                "Tipo": DataSchema.OPERATION,
             },
             inplace=True,
         )
@@ -53,6 +55,6 @@ class Fundamentus_Page:
             "JRS CAP PRÓPRIO": "JCP",
             "JUROS MENSAL": "JCP",
         }
-        res["OPERATION"] = res["OPERATION"].map(lambda x: operation_map[x.upper()])
+        res[DataSchema.OPERATION] = res[DataSchema.OPERATION].map(lambda x: operation_map[x.upper()])
 
         return res

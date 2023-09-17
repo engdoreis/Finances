@@ -1,7 +1,6 @@
 from dash import Dash, dcc, html
 from dash.dependencies import Input, Output
 import plotly.express as px
-from Wallet import Wallet
 from . import ids
 
 

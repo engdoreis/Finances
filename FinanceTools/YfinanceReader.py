@@ -2,6 +2,8 @@ import pandas as pd
 import yfinance as yf
 from .DividendReader import DividendReader
 
+from data import DataSchema
+
 # 30% tax
 tax_rate = 0.3
 
@@ -16,14 +18,16 @@ class YfinanceReader(DividendReader):
             except:
                 continue
             if not data.empty:
-                data["SYMBOL"] = paper.replace(".SA", "")
+                data[DataSchema.SYMBOL] = paper.replace(".SA", "")
                 res = pd.concat([res, data], axis=0)
 
         res.reset_index(inplace=True)
-        res.rename(columns={"Date": "DATE", "Dividends": "PRICE"}, inplace=True)
-        res["PAYDATE"] = res["DATE"] = pd.to_datetime(res["DATE"], format="%Y/%m/%d").dt.tz_localize(None)
-        res = res[res["DATE"] >= self.start_date]
-        res["TAX"] = res["PRICE"] * tax_rate * 0
-        res = res[["SYMBOL", "DATE", "PRICE", "PAYDATE", "TAX"]]
-        res["OPERATION"] = "D2"
+        res.rename(columns={"Date": DataSchema.DATE, "Dividends": DataSchema.PRICE}, inplace=True)
+        res[DataSchema.PAYDATE] = res[DataSchema.DATE] = pd.to_datetime(
+            res[DataSchema.DATE], format="%Y/%m/%d"
+        ).dt.tz_localize(None)
+        res = res[res[DataSchema.DATE] >= self.start_date]
+        res["TAX"] = res[DataSchema.PRICE] * tax_rate * 0
+        res = res[[DataSchema.SYMBOL, DataSchema.DATE, DataSchema.PRICE, DataSchema.PAYDATE, "TAX"]]
+        res[DataSchema.OPERATION] = "D2"
         return res

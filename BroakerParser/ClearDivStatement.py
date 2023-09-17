@@ -34,8 +34,8 @@ class ClearDivStatement:
             tmp = pd.read_csv(file, sep=";", decimal=",", thousands=".")
             self.dtFrame = pd.concat([self.dtFrame, tmp.iloc[::-1]])
         self.dtFrame.columns = "DATE PAYDATE PRICE DESCRIPTION CASH".split()
-        self.dtFrame["DATE"] = pd.to_datetime(self.dtFrame["DATE"], format="%d/%m/%Y")
-        self.dtFrame["PAYDATE"] = pd.to_datetime(self.dtFrame["PAYDATE"], format="%d/%m/%Y")
+        self.dtFrame[DataSchema.DATE] = pd.to_datetime(self.dtFrame[DataSchema.DATE], format="%d/%m/%Y")
+        self.dtFrame[DataSchema.PAYDATE] = pd.to_datetime(self.dtFrame[DataSchema.PAYDATE], format="%d/%m/%Y")
         self.dtFrame.to_csv(self.inputDir + "/extrato.tsv", index=False, sep="\t")
 
     def description_parser(self, value):
@@ -66,7 +66,7 @@ class ClearDivStatement:
                 ).search(value)
                 if res:
                     op = self.operation_map[res.group(1)]
-                    symbol = self.symbol_map.get(res.group(1), "CASH")
+                    symbol = self.symbol_map.get(res.group(1), DataSchema.CASH)
                     qty = 1
                     break
 
@@ -95,21 +95,27 @@ class ClearDivStatement:
 
     def process(self):
         self.concat_files()
-        self.dtFrame["OPERATION"], self.dtFrame["QUANTITY"], self.dtFrame["SYMBOL"] = zip(
-            *self.dtFrame["DESCRIPTION"].map(self.description_parser)
+        self.dtFrame[DataSchema.OPERATION], self.dtFrame[DataSchema.QUANTITY], self.dtFrame[DataSchema.SYMBOL] = zip(
+            *self.dtFrame[DataSchema.DESCRIPTION].map(self.description_parser)
         )
 
         operation_order_map = {"A1": 0, "R1": 1, "D1": 2, "JCP1": 3, "T1": 4, "I1": 5}
-        self.dtFrame["OPERATION_ORDER"] = self.dtFrame["OPERATION"].map(lambda x: operation_order_map.get(x, 10))
-        self.dtFrame.sort_values(["PAYDATE", "OPERATION_ORDER"], inplace=True)
+        self.dtFrame["OPERATION_ORDER"] = self.dtFrame[DataSchema.OPERATION].map(
+            lambda x: operation_order_map.get(x, 10)
+        )
+        self.dtFrame.sort_values([DataSchema.PAYDATE, "OPERATION_ORDER"], inplace=True)
 
-        self.dtFrame["SYMBOL"] = self.dtFrame["SYMBOL"].fillna(self.dtFrame["SYMBOL"].shift(-1))
-        self.dtFrame["QUANTITY"] = self.dtFrame["QUANTITY"].fillna(self.dtFrame["QUANTITY"].shift(-1))
-        self.dtFrame["PRICE"] /= self.dtFrame["QUANTITY"]
+        self.dtFrame[DataSchema.SYMBOL] = self.dtFrame[DataSchema.SYMBOL].fillna(
+            self.dtFrame[DataSchema.SYMBOL].shift(-1)
+        )
+        self.dtFrame[DataSchema.QUANTITY] = self.dtFrame[DataSchema.QUANTITY].fillna(
+            self.dtFrame[DataSchema.QUANTITY].shift(-1)
+        )
+        self.dtFrame[DataSchema.PRICE] /= self.dtFrame[DataSchema.QUANTITY]
         self.dtFrame = self.dtFrame.dropna()
         self.dtFrame = self.dtFrame["SYMBOL DATE PRICE PAYDATE OPERATION QUANTITY DESCRIPTION".split()]
-        self.dtFrame["DATE"] = pd.to_datetime(self.dtFrame["DATE"], format="%Y-%m-%d")
-        self.dtFrame["PAYDATE"] = pd.to_datetime(self.dtFrame["PAYDATE"], format="%Y-%m-%d")
+        self.dtFrame[DataSchema.DATE] = pd.to_datetime(self.dtFrame[DataSchema.DATE], format="%Y-%m-%d")
+        self.dtFrame[DataSchema.PAYDATE] = pd.to_datetime(self.dtFrame[DataSchema.PAYDATE], format="%Y-%m-%d")
         # exit()
 
     def finish(self):

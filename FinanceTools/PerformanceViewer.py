@@ -4,6 +4,8 @@ import pandas as pd
 from .PerformanceSnapshot import PerformanceSnapshot
 from .Color import Color
 
+from data import DataSchema
+
 
 class PerformanceViewer:
     def __init__(self, *args):
@@ -14,7 +16,7 @@ class PerformanceViewer:
                 row["Cost"],
                 row["Expense"],
                 row["paperProfit"],
-                row["Profit"],
+                row[DataSchema.PROFIT],
                 row["Div"],
                 row["TotalProfit"],
                 row["selic"],

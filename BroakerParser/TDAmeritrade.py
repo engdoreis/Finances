@@ -4,6 +4,7 @@ from glob import glob
 import pandas as pd
 from collections import namedtuple
 
+from data import DataSchema
 from .Broaker import Broaker
 
 
@@ -45,20 +46,51 @@ class TDAmeritrade(Broaker):
         table = pd.DataFrame()
         for file in sorted(glob(in_dir + "/*.csv")):
             df = pd.read_csv(file)
-            df = df[~df["DATE"].str.contains("END OF FILE")].fillna(0)
-            df["TYPE"] = "STOCK"
-            df["DATE"] = pd.to_datetime(df["DATE"]).dt.strftime("%Y-%m-%d")
-            df = df[["SYMBOL", "DATE", "PRICE", "QUANTITY", "DESCRIPTION", "TYPE", "COMMISSION", "AMOUNT"]]
+            df = df[~df[DataSchema.DATE].str.contains("END OF FILE")].fillna(0)
+            df[DataSchema.TYPE] = "STOCK"
+            df[DataSchema.DATE] = pd.to_datetime(df[DataSchema.DATE]).dt.strftime("%Y-%m-%d")
+            df = df[
+                [
+                    DataSchema.SYMBOL,
+                    DataSchema.DATE,
+                    DataSchema.PRICE,
+                    DataSchema.QTY,
+                    DataSchema.DESCRIPTION,
+                    DataSchema.TYPE,
+                    "COMMISSION",
+                    DataSchema.AMOUNT,
+                ]
+            ]
+
+            df.columns = [
+                DataSchema.SYMBOL,
+                DataSchema.DATE,
+                DataSchema.PRICE,
+                DataSchema.QTY,
+                DataSchema.DESCRIPTION,
+                DataSchema.TYPE,
+                DataSchema.FEES,
+                DataSchema.AMOUNT,
+            ]
 
             df = df.apply(description_parser, axis=1)
-            df = df.rename(columns={"DESCRIPTION": "OPERATION"})
+            df = df.rename(columns={DataSchema.DESCRIPTION: DataSchema.OPERATION})
             if table.empty:
                 table = pd.concat([table, df])
             else:
                 table = table.merge(
                     df,
                     how="outer",
-                    on=["SYMBOL", "DATE", "PRICE", "QUANTITY", "OPERATION", "TYPE", "COMMISSION", "AMOUNT"],
+                    on=[
+                        DataSchema.SYMBOL,
+                        DataSchema.DATE,
+                        DataSchema.PRICE,
+                        DataSchema.QTY,
+                        DataSchema.OPERATION,
+                        DataSchema.TYPE,
+                        DataSchema.FEES,
+                        DataSchema.AMOUNT,
+                    ],
                     suffixes=["", "_"],
                     indicator=True,
                 )
@@ -69,45 +101,45 @@ class TDAmeritrade(Broaker):
 
 
 def description_parser(row):
-    desc = row["DESCRIPTION"]
+    desc = row[DataSchema.DESCRIPTION]
     if "Bought" in desc:
-        row["DESCRIPTION"] = "B"
+        row[DataSchema.DESCRIPTION] = "B"
     if "Sold" in desc:
-        row["DESCRIPTION"] = "S"
+        row[DataSchema.DESCRIPTION] = "S"
     if "DIVIDEND" in desc:
-        row["DESCRIPTION"] = "D1"
-        row["QUANTITY"] = 1
-        row["PRICE"] = row["AMOUNT"]
+        row[DataSchema.DESCRIPTION] = "D1"
+        row[DataSchema.QTY] = 1
+        row[DataSchema.PRICE] = row[DataSchema.AMOUNT]
     if "GAIN DISTRIBUTION" in desc:
-        row["DESCRIPTION"] = "D1"
-        row["QUANTITY"] = 1
-        row["PRICE"] = row["AMOUNT"]
+        row[DataSchema.DESCRIPTION] = "D1"
+        row[DataSchema.QTY] = 1
+        row[DataSchema.PRICE] = row[DataSchema.AMOUNT]
     if "TAX WITHHELD" in desc:
-        row["DESCRIPTION"] = "D1"
-        row["QUANTITY"] = 1
-        row["PRICE"] = row["AMOUNT"]
+        row[DataSchema.DESCRIPTION] = "D1"
+        row[DataSchema.QTY] = 1
+        row[DataSchema.PRICE] = row[DataSchema.AMOUNT]
     if "W-8" in desc:  # Dividend Taxes
-        row["DESCRIPTION"] = "T1"
-        row["QUANTITY"] = 1
-        row["PRICE"] = row["AMOUNT"]
+        row[DataSchema.DESCRIPTION] = "T1"
+        row[DataSchema.QTY] = 1
+        row[DataSchema.PRICE] = row[DataSchema.AMOUNT]
     if "REORGANIZATION FEE" in desc:
-        row["DESCRIPTION"] = "T1"
-        row["QUANTITY"] = 1
-        row["PRICE"] = row["AMOUNT"]
+        row[DataSchema.DESCRIPTION] = "T1"
+        row[DataSchema.QTY] = 1
+        row[DataSchema.PRICE] = row[DataSchema.AMOUNT]
     if "SPLIT" in desc:
-        row["DESCRIPTION"] = "SPLIT-TD"
-        row["PRICE"] = 0
-        row["SYMBOL"] = ""
+        row[DataSchema.DESCRIPTION] = "SPLIT-TD"
+        row[DataSchema.PRICE] = 0
+        row[DataSchema.SYMBOL] = ""
     if "WIRE" in desc:
-        row["DESCRIPTION"] = "C"
-        row["TYPE"] = "WIRE"
-        row["SYMBOL"] = "CASH"
-        row["QUANTITY"] = 1
-        row["PRICE"] = row["AMOUNT"]
+        row[DataSchema.DESCRIPTION] = "C"
+        row[DataSchema.TYPE] = "WIRE"
+        row[DataSchema.SYMBOL] = DataSchema.CASH
+        row[DataSchema.QTY] = 1
+        row[DataSchema.PRICE] = row[DataSchema.AMOUNT]
     if "INTEREST" in desc:
-        row["DESCRIPTION"] = "C"
-        row["TYPE"] = "INTEREST"
-        row["SYMBOL"] = "CASH"
-        row["QUANTITY"] = 1
-        row["PRICE"] = row["AMOUNT"]
+        row[DataSchema.DESCRIPTION] = "C"
+        row[DataSchema.TYPE] = "INTEREST"
+        row[DataSchema.SYMBOL] = DataSchema.CASH
+        row[DataSchema.QTY] = 1
+        row[DataSchema.PRICE] = row[DataSchema.AMOUNT]
     return row

@@ -5,41 +5,52 @@ from .Color import Color
 from .TableAccumulator import TableAccumulator
 
 
+from data import DataSchema
+
+
 class Portfolio:
     def __init__(self, price_reader, split_reader, date, dFrame, recommended=None, currency="$"):
         self.currency = currency
-        self.dtframe = dFrame.groupby(["SYMBOL"]).apply(lambda x: x.tail(1))
+        self.dtframe = dFrame.groupby([DataSchema.SYMBOL]).apply(lambda x: x.tail(1))
 
-        dFrame = dFrame.sort_values(["PAYDATE", "OPERATION"], ascending=[True, False])
+        dFrame = dFrame.sort_values([DataSchema.PAYDATE, DataSchema.OPERATION], ascending=[True, False])
         dFrame = dFrame.apply(TableAccumulator().Cash, axis=1)
-        cash = dFrame.iloc[-1]["CASH"]
+        cash = dFrame.iloc[-1][DataSchema.CASH]
 
-        self.dtframe = self.dtframe[["SYMBOL", "PM", "acum_qty", "acumProv", "TYPE"]]
-        self.dtframe.columns = ["SYMBOL", "PM", "QUANTITY", "DIVIDENDS", "TYPE"]
-        self.dtframe["COST"] = self.dtframe.PM * self.dtframe["QUANTITY"]
-        self.dtframe = self.dtframe[self.dtframe["QUANTITY"] > 0]
+        self.dtframe = self.dtframe[
+            [DataSchema.SYMBOL, DataSchema.AVERAGE_PRICE, DataSchema.QTY_ACUM, DataSchema.DIV_ACUM, DataSchema.TYPE]
+        ]
+        self.dtframe.columns = [
+            DataSchema.SYMBOL,
+            DataSchema.AVERAGE_PRICE,
+            DataSchema.QTY,
+            "DIVIDENDS",
+            DataSchema.TYPE,
+        ]
+        self.dtframe["COST"] = self.dtframe.PM * self.dtframe[DataSchema.QTY]
+        self.dtframe = self.dtframe[self.dtframe[DataSchema.QTY] > 0]
         self.dtframe.reset_index(drop=True, inplace=True)
 
-        self.dtframe = self.dtframe[self.dtframe["SYMBOL"] != "CASH"]
+        self.dtframe = self.dtframe[self.dtframe[DataSchema.SYMBOL] != DataSchema.CASH]
 
         def fillCurrentValue(pr, sr, date, row):
-            return pr.getCurrentValue(row["SYMBOL"], date) * sr.get_accumulated(row["SYMBOL"], date)
+            return pr.getCurrentValue(row[DataSchema.SYMBOL], date) * sr.get_accumulated(row[DataSchema.SYMBOL], date)
 
-        self.dtframe["PRICE"] = self.dtframe.apply(
+        self.dtframe[DataSchema.PRICE] = self.dtframe.apply(
             lambda row: fillCurrentValue(price_reader, split_reader, date, row), axis=1
         )
 
-        self.dtframe["PRICE"] = self.dtframe["PRICE"].fillna(self.dtframe["PM"])
-        self.dtframe["MKT_VALUE"] = self.dtframe["PRICE"] * self.dtframe["QUANTITY"]
+        self.dtframe[DataSchema.PRICE] = self.dtframe[DataSchema.PRICE].fillna(self.dtframe[DataSchema.AVERAGE_PRICE])
+        self.dtframe["MKT_VALUE"] = self.dtframe[DataSchema.PRICE] * self.dtframe[DataSchema.QTY]
 
         newLine = {
-            "SYMBOL": "CASH",
-            "PM": cash,
-            "QUANTITY": 1,
+            DataSchema.SYMBOL: DataSchema.CASH,
+            DataSchema.AVERAGE_PRICE: cash,
+            DataSchema.QTY: 1,
             "DIVIDENDS": 0,
-            "TYPE": "C",
+            DataSchema.TYPE: "C",
             "COST": cash,
-            "PRICE": cash,
+            DataSchema.PRICE: cash,
             "MKT_VALUE": cash,
         }
         self.dtframe = pd.concat([self.dtframe, pd.DataFrame(newLine, index=[0])])
@@ -51,14 +62,14 @@ class Portfolio:
         self.dtframe["ALLOCATION"] = self.dtframe["MKT_VALUE"] / self.dtframe["MKT_VALUE"].sum()
         self.dtframe = self.dtframe.replace([np.inf, -np.inf], np.nan).fillna(0)
 
-        self.dtframe = self.dtframe[self.dtframe["PM"] > 0]
+        self.dtframe = self.dtframe[self.dtframe[DataSchema.AVERAGE_PRICE] > 0]
 
         self.dtframe = self.dtframe[
             [
-                "SYMBOL",
-                "PM",
-                "PRICE",
-                "QUANTITY",
+                DataSchema.SYMBOL,
+                DataSchema.AVERAGE_PRICE,
+                DataSchema.PRICE,
+                DataSchema.QTY,
                 "COST",
                 "MKT_VALUE",
                 "DIVIDENDS",
@@ -71,9 +82,9 @@ class Portfolio:
         ]
 
         self.format = {
-            "PRICE": f"{currency} {{:,.2f}}",
-            "PM": f"{currency} {{:,.2f}}",
-            "QUANTITY": "{:>n}",
+            DataSchema.PRICE: f"{currency} {{:,.2f}}",
+            DataSchema.AVERAGE_PRICE: f"{currency} {{:,.2f}}",
+            DataSchema.QTY: "{:>n}",
             "COST": f"{currency} {{:,.2f}}",
             "MKT_VALUE": f"{currency} {{:,.2f}}",
             "DIVIDENDS": f"{currency} {{:,.2f}}",
@@ -86,17 +97,17 @@ class Portfolio:
 
         self.extra_content(recommended)
 
-        self.dtframe.set_index("SYMBOL", inplace=True)
+        self.dtframe.set_index(DataSchema.SYMBOL, inplace=True)
 
     def extra_content(self, recommended):
         if recommended == None:
             return
 
         self.dtframe["TARGET"], self.dtframe["TOP_PRICE"], self.dtframe["PRIORITY"] = zip(
-            *self.dtframe["SYMBOL"].map(lambda x: self.recommended(recommended, x))
+            *self.dtframe[DataSchema.SYMBOL].map(lambda x: self.recommended(recommended, x))
         )
         self.dtframe["BUY"] = (
-            self.dtframe["QUANTITY"] * (self.dtframe["TARGET"] - self.dtframe["ALLOCATION"])
+            self.dtframe[DataSchema.QTY] * (self.dtframe["TARGET"] - self.dtframe["ALLOCATION"])
         ) / self.dtframe["ALLOCATION"]
 
         format = {"TARGET": "{:,.2f}%", "TOP_PRICE": f"{self.currency} {{:,.2f}}", "BUY": "{:,.1f}"}

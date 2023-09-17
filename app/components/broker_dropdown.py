@@ -2,7 +2,6 @@ from dash import Dash, dcc, html
 from dash.dependencies import Input, Output
 
 import dash_bootstrap_components as dbc
-import Wallet
 from . import ids
 
 
