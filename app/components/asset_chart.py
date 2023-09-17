@@ -2,7 +2,7 @@ from dash import Dash, dcc, html
 from dash.dependencies import Input, Output
 import plotly.graph_objects as go
 from . import ids
-
+from data import DataSchema
 
 def render(app: Dash, configs) -> html.Div:
     @app.callback(
@@ -10,12 +10,12 @@ def render(app: Dash, configs) -> html.Div:
         Input(ids.BROKER_DROPDOWN, "value"),
     )
     def update_chart(value):
-        df = configs[value[0]].historic_profit_df
+        df = configs[value].historic_profit_df
         bar = go.Figure(
             data=[
                 go.Bar(x=df["Date"], y=df["Equity"], name="Equity", offsetgroup=1),
-                go.Bar(x=df["Date"], y=df[DataSchema.Profit], name=DataSchema.Profit, base=df["Equity"], offsetgroup=1),
-                go.Bar(x=df["Date"], y=df["Div"], name="Div", base=df["Equity"] + df[DataSchema.Profit], offsetgroup=1),
+                go.Bar(x=df["Date"], y=df[DataSchema.PROFIT], name=DataSchema.PROFIT, base=df["Equity"], offsetgroup=1),
+                go.Bar(x=df["Date"], y=df["Div"], name="Div", base=df["Equity"] + df[DataSchema.PROFIT], offsetgroup=1),
                 go.Bar(x=df.Date, y=df.Cost, name="Cost", offsetgroup=0),
             ]
         )

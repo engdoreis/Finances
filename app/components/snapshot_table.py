@@ -11,7 +11,7 @@ def render(app: Dash, configs) -> html.Div:
         Input(ids.BROKER_DROPDOWN, "value"),
     )
     def update_chart(value):
-        df = configs[value[0]].performance_snapshot.reset_index()
+        df = configs[value].performance_snapshot.reset_index()
         columns = [dict(id="Item", name=" ", type="text")]
 
         if "USD" in df.columns:

@@ -11,7 +11,7 @@ def render(app: Dash, configs) -> html.Div:
         Input(ids.BROKER_DROPDOWN, "value"),
     )
     def update_chart(value):
-        df = configs[value[0]].historic_profit_df
+        df = configs[value].historic_profit_df
         line = px.line(df, x="Date", y="profit_growth ibov_growth sp500_growth CDB".split(), width=1500, height=800)
         line.update_xaxes(zeroline=True, zerolinewidth=2, zerolinecolor="Black")
         line.update_yaxes(zeroline=True, zerolinewidth=2, zerolinecolor="Black")

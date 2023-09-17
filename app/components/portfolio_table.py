@@ -13,7 +13,7 @@ def render(app: Dash, configs) -> html.Div:
         Input(ids.BROKER_DROPDOWN, "value"),
     )
     def update_chart(value):
-        wallet = configs[value[0]]
+        wallet = configs[value]
         df = wallet.portfolio_df.reset_index()
         symbol = wallet.currency.symbol
         money_fmt = FormatTemplate.money(2).symbol_prefix(symbol)
