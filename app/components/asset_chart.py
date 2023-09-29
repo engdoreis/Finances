@@ -4,6 +4,7 @@ import plotly.graph_objects as go
 from . import ids
 from data import DataSchema
 
+
 def render(app: Dash, configs) -> html.Div:
     @app.callback(
         Output(ids.ASSET_CHART, "children"),
@@ -19,11 +20,9 @@ def render(app: Dash, configs) -> html.Div:
                 go.Bar(x=df.Date, y=df.Cost, name="Cost", offsetgroup=0),
             ]
         )
-        bar.update_layout(width=1500, height=350)
+        bar.update_layout(width=1500, height=350, hovermode="x unified", margin=dict(l=1, r=1, t=5, b=1))
 
         bar.update_traces(hovertemplate="<b>%{fullData.name}</b>: %{y}<br>" + "<extra></extra>")
-
-        bar.update_layout(hovermode="x unified")
 
         return html.Div(dcc.Graph(figure=bar), id=ids.ASSET_CHART)
 
