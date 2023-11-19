@@ -8,6 +8,7 @@ from .components import (
     ids,
     broker_dropdown,
     update_btn,
+    dividends_table,
 )
 
 TABS = dict()
@@ -39,7 +40,15 @@ def home_tab(app: Dash, configs) -> html.Div:
 
 
 def dividends_tab(app: Dash, configs) -> html.Div:
-    return html.Div([html.H3("Tab 2 Content"), html.P("This is the content of Tab 2.")])
+    return html.Div(
+        children=[
+            dbc.Row(
+                [
+                    dividends_table.render(app, configs),
+                ]
+            ),
+        ],
+    )
 
 
 def create_layout(app: Dash, configs) -> html.Div:
