@@ -15,8 +15,9 @@ class StockInfoCache:
 
     def load_data(self):
         table = self.cache.get_data()
+
         if not table.empty:
-            table[DataSchema.DATE] = pd.to_datetime(table[DataSchema.DATE], format="%Y-%m-%d")
+            table[DataSchema.DATE] = pd.to_datetime(table[DataSchema.DATE], format=DataSchema.DATE_FORMAT)
         self.table = table
         return self.table
 

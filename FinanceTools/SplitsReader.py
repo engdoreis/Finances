@@ -48,5 +48,5 @@ class SplitsReader:
         res.index.rename(DataSchema.DATE, inplace=True)
         res.columns = [DataSchema.SYMBOL, DataSchema.QTY]
         res = res.reset_index()
-        res[DataSchema.DATE] = pd.to_datetime(res[DataSchema.DATE], format="%Y-%m-%d").dt.tz_localize(None)
+        res[DataSchema.DATE] = pd.to_datetime(res[DataSchema.DATE], format=DataSchema.DATE_FORMAT).dt.tz_localize(None)
         return res[res[DataSchema.DATE] > self.start_date]

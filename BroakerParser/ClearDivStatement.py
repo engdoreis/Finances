@@ -2,6 +2,7 @@ import re
 from glob import glob
 
 import pandas as pd
+from data import DataSchema
 
 
 class ClearDivStatement:
@@ -34,8 +35,10 @@ class ClearDivStatement:
             tmp = pd.read_csv(file, sep=";", decimal=",", thousands=".")
             self.dtFrame = pd.concat([self.dtFrame, tmp.iloc[::-1]])
         self.dtFrame.columns = "DATE PAYDATE PRICE DESCRIPTION CASH".split()
-        self.dtFrame[DataSchema.DATE] = pd.to_datetime(self.dtFrame[DataSchema.DATE], format="%d/%m/%Y")
-        self.dtFrame[DataSchema.PAYDATE] = pd.to_datetime(self.dtFrame[DataSchema.PAYDATE], format="%d/%m/%Y")
+        self.dtFrame[DataSchema.DATE] = pd.to_datetime(self.dtFrame[DataSchema.DATE], format=DataSchema.DATE_FORMAT)
+        self.dtFrame[DataSchema.PAYDATE] = pd.to_datetime(
+            self.dtFrame[DataSchema.PAYDATE], format=DataSchema.DATE_FORMAT
+        )
         self.dtFrame.to_csv(self.inputDir + "/extrato.tsv", index=False, sep="\t")
 
     def description_parser(self, value):
@@ -114,8 +117,10 @@ class ClearDivStatement:
         self.dtFrame[DataSchema.PRICE] /= self.dtFrame[DataSchema.QUANTITY]
         self.dtFrame = self.dtFrame.dropna()
         self.dtFrame = self.dtFrame["SYMBOL DATE PRICE PAYDATE OPERATION QUANTITY DESCRIPTION".split()]
-        self.dtFrame[DataSchema.DATE] = pd.to_datetime(self.dtFrame[DataSchema.DATE], format="%Y-%m-%d")
-        self.dtFrame[DataSchema.PAYDATE] = pd.to_datetime(self.dtFrame[DataSchema.PAYDATE], format="%Y-%m-%d")
+        self.dtFrame[DataSchema.DATE] = pd.to_datetime(self.dtFrame[DataSchema.DATE], format=DataSchema.DATE_FORMAT)
+        self.dtFrame[DataSchema.PAYDATE] = pd.to_datetime(
+            self.dtFrame[DataSchema.PAYDATE], format=DataSchema.DATE_FORMAT
+        )
         # exit()
 
     def finish(self):

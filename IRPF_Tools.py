@@ -15,7 +15,7 @@ http_header = {
 class ProcessedOrders:
     def __init__(self, file):
         self.dFrame = pd.read_csv(file, sep="\t")
-        self.dFrame[DataSchema.DATE] = pd.to_datetime(self.dFrame[DataSchema.DATE], format="%Y/%m/%d")
+        self.dFrame[DataSchema.DATE] = pd.to_datetime(self.dFrame[DataSchema.DATE], format=DataSchema.DATE_FORMAT)
 
     def import_df(self):
         return self.dFrame

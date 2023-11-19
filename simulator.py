@@ -39,7 +39,7 @@ class Simulator:
 
     def ProcessTimeline(self, stocks):
         monthList = pd.date_range(start=self.start_date, end=datetime.today(), freq="MS").format(
-            formatter=lambda x: x.strftime("%Y-%m-%d")
+            formatter=lambda x: x.strftime(DataSchema.DATE_FORMAT)
         )
         for date in monthList:
             self.ProcessTickers(stocks, date)

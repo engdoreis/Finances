@@ -32,7 +32,7 @@ class CharlesChwab(Broaker):
             ]
 
             df = df[~df[DataSchema.DATE].str.contains("Transactions Total")].fillna(0)
-            df[DataSchema.DATE] = pd.to_datetime(df[DataSchema.DATE]).dt.strftime("%Y-%m-%d")
+            df[DataSchema.DATE] = pd.to_datetime(df[DataSchema.DATE]).dt.strftime(DataSchema.DATE_FORMAT)
             df[DataSchema.TYPE] = "STOCK"
 
             df = df[

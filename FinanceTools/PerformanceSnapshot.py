@@ -22,7 +22,7 @@ class PerformanceSnapshot:
             self.equity = (ptf[DataSchema.PRICE] * ptf[DataSchema.QTY]).sum()
             self.cost = ptf["COST"].sum()
             self.realizedProfit = self.df.loc[self.df.OPERATION == "S", DataSchema.PROFIT].sum()
-            self.div = self.df[self.df.OPERATION.isin(["D1", "A1", "R1", "JCP1", "D", "A", "R", "JCP", "CF"])][
+            self.div = self.df[self.df.OPERATION.isin(["D1", "T1", "A1", "R1", "JCP1", "D", "A", "R", "JCP", "CF"])][
                 DataSchema.AMOUNT
             ].sum()
             self.paperProfit = self.equity - self.cost

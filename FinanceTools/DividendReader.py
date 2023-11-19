@@ -40,7 +40,7 @@ class DividendReader:
             )
         else:
             self.df = self.cache.load_data()
-            self.df[DataSchema.PAYDATE] = pd.to_datetime(self.df[DataSchema.PAYDATE], format="%Y-%m-%d")
+            self.df[DataSchema.PAYDATE] = pd.to_datetime(self.df[DataSchema.PAYDATE], format=DataSchema.DATE_FORMAT)
 
         if not self.df.empty:
             self.df.set_index(DataSchema.DATE, inplace=True)
@@ -67,8 +67,8 @@ class DividendReader:
             rawTable[DataSchema.PAYDATE] = np.where(
                 rawTable[DataSchema.PAYDATE] == "-", rawTable[DataSchema.DATE], rawTable[DataSchema.PAYDATE]
             )
-            rawTable[DataSchema.PAYDATE] = pd.to_datetime(rawTable[DataSchema.PAYDATE], format="%d-%m-%Y")
-            rawTable[DataSchema.DATE] = pd.to_datetime(rawTable[DataSchema.DATE], format="%d-%m-%Y")
+            rawTable[DataSchema.PAYDATE] = pd.to_datetime(rawTable[DataSchema.PAYDATE], format=DataSchema.DATE_FORMAT)
+            rawTable[DataSchema.DATE] = pd.to_datetime(rawTable[DataSchema.DATE], format=DataSchema.DATE_FORMAT)
             rawTable = rawTable[
                 [DataSchema.SYMBOL, DataSchema.DATE, DataSchema.PRICE, DataSchema.PAYDATE, DataSchema.OPERATION, "TAX"]
             ]

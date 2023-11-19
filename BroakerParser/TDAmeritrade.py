@@ -31,7 +31,7 @@ class TDAmeritrade(Broaker):
             res = re.compile(r"(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})\s+([\d.]+)\s+([\d.]+)").search(line)
             if res:
                 # print (res.group(0))
-                date = pd.to_datetime(res.group(1), format="%m/%d/%Y").strftime("%Y-%m-%d")
+                date = pd.to_datetime(res.group(1), format="%m/%d/%Y").strftime(DataSchema.DATE_FORMAT)
                 total = res.group(4)
                 continue
 
@@ -48,7 +48,7 @@ class TDAmeritrade(Broaker):
             df = pd.read_csv(file)
             df = df[~df[DataSchema.DATE].str.contains("END OF FILE")].fillna(0)
             df[DataSchema.TYPE] = "STOCK"
-            df[DataSchema.DATE] = pd.to_datetime(df[DataSchema.DATE]).dt.strftime("%Y-%m-%d")
+            df[DataSchema.DATE] = pd.to_datetime(df[DataSchema.DATE]).dt.strftime(DataSchema.DATE_FORMAT)
             df = df[
                 [
                     DataSchema.SYMBOL,

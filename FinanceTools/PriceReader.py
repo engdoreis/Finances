@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 from bcb import sgs
+from data import DataSchema
 
 
 @dataclass
@@ -14,7 +15,7 @@ class PriceReader:
     start_date: str = "2018-01-01"
 
     def __post_init__(self):
-        self.start_date = self.start_date.strftime("%Y-%m-%d")
+        self.start_date = self.start_date.strftime(DataSchema.DATE_FORMAT)
         self.df = pd.DataFrame(columns=["Date"])
 
     def load(self):

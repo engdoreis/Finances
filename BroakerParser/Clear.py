@@ -48,7 +48,7 @@ class Clear(Broaker):
 
             res = re.compile(r"\d{2}/\d{2}/\d{4}$").search(line)
             if res:
-                Date = pd.to_datetime(res.group(0), format="%d/%m/%Y").strftime("%Y-%m-%d")
+                Date = pd.to_datetime(res.group(0), format=DataSchema.DATE_FORMAT).strftime(DataSchema.DATE_FORMAT)
                 continue
 
             res = re.compile(r".*?Taxa de liquida.*?\s+([\d,]+)").search(line)

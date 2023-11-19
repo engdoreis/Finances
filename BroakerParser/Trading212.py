@@ -22,7 +22,7 @@ class Trading212(Broaker):
             df = df.apply(isin_process, axis=1)
             df[DataSchema.TYPE] = "STOCK"
             # df["COMMISSION"] = 0
-            df[DataSchema.DATE] = pd.to_datetime(df["Time"]).dt.strftime("%Y-%m-%d")
+            df[DataSchema.DATE] = pd.to_datetime(df["Time"]).dt.strftime(DataSchema.DATE_FORMAT)
             df = df[
                 [
                     "Ticker",

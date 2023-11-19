@@ -128,4 +128,4 @@ class Portfolio:
 
     def show(self):
         fdf = self.dtframe.copy(deep=True)
-        return fdf.style.applymap(Color().color_negative_red).format(self.format)
+        return fdf.style.map(Color().color_negative_red).format(self.format)

@@ -21,6 +21,7 @@ class DataSchema:
     DAYTRADE = "DayTrade"
     DIV_ACUM = "acumProv"
     QTY_ACUM = "acum_qty"
+    DATE_FORMAT = "%Y-%m-%d"
 
     def base_columns():
         return [

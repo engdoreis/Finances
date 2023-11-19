@@ -119,8 +119,8 @@ class Wallet:
             self.df[DataSchema.FEES] = pd.to_numeric(self.df[DataSchema.FEES], errors="coerce")
 
         if self.df[DataSchema.DATE].apply(type).eq(str).any():
-            self.df[DataSchema.DATE] = self.df.DATE.str.replace("-", "/")
-            self.df[DataSchema.DATE] = pd.to_datetime(self.df[DataSchema.DATE], format="%Y/%m/%d")
+            self.df[DataSchema.DATE] = self.df.DATE.str.replace("/", "-")
+            self.df[DataSchema.DATE] = pd.to_datetime(self.df[DataSchema.DATE], format=DataSchema.DATE_FORMAT)
         self.df[DataSchema.YEAR] = pd.DatetimeIndex(self.df[DataSchema.DATE]).year
         self.df[DataSchema.MONTH] = pd.DatetimeIndex(self.df[DataSchema.DATE]).month_name()
 
@@ -214,7 +214,7 @@ class Wallet:
         self.df[DataSchema.AVERAGE_PRICE] = 0
         self.df[DataSchema.CASH] = 0
         self.df[DataSchema.PAYDATE] = self.df[DataSchema.DATE]
-        today = dt.datetime.today().strftime("%Y-%m-%d")
+        today = dt.datetime.today().strftime(DataSchema.DATE_FORMAT)
 
         for paper in self.brTickers + self.fiiTickers + self.usTickers:
             paperTable = self.df[self.df[DataSchema.SYMBOL] == paper]
@@ -318,13 +318,13 @@ class Wallet:
                 DataSchema.DAYTRADE,
             ]
         ].copy(deep=True)
-        rl1[DataSchema.DATE] = rl1[DataSchema.DATE].apply(lambda x: x.strftime("%Y-%m-%d"))
+        rl1[DataSchema.DATE] = rl1[DataSchema.DATE].apply(lambda x: x.strftime(DataSchema.DATE_FORMAT))
         rl1 = rl1.groupby([DataSchema.DATE, DataSchema.SYMBOL, DataSchema.TYPE]).sum().reset_index()
         rl1.loc["Total", DataSchema.PROFIT] = rl[DataSchema.PROFIT].sum()
         rl1[DataSchema.AMOUNT] = rl1[DataSchema.AMOUNT].abs()
         rl1.loc["Total", DataSchema.AMOUNT] = 0
         rl1 = rl1.fillna(" ").reset_index(drop=True)
-        self.realized_profit_df = rl1.style.applymap(
+        self.realized_profit_df = rl1.style.map(
             Color().color_negative_red, subset=[DataSchema.PROFIT, DataSchema.AMOUNT]
         ).format(
             {
@@ -337,7 +337,7 @@ class Wallet:
         rl1 = rl.groupby(DataSchema.SYMBOL).Profit.sum().reset_index()
         rl1.loc["Total", DataSchema.PROFIT] = rl1[DataSchema.PROFIT].sum()
         rl1 = rl1.fillna(" ").reset_index(drop=True)
-        self.realized_profit_by_symbol_df = rl1.style.applymap(
+        self.realized_profit_by_symbol_df = rl1.style.map(
             Color().color_negative_red, subset=[DataSchema.PROFIT]
         ).format({DataSchema.PROFIT: f"{self.currency.symbol} {{:,.2f}}"})
 
@@ -356,7 +356,7 @@ class Wallet:
             sorted_m = sorted(pvt.columns[:-1], key=lambda month: dt.datetime.strptime(month, "%B"))
             sorted_m.append(pvt.columns[-1])
             pvt = pvt.reindex(sorted_m, axis=1)
-            return pvt.style.applymap(Color().color_negative_red).format("{:,.2f}")
+            return pvt.style.map(Color().color_negative_red).format("{:,.2f}")
 
         if not rl.empty:
             self.realized_profit_pivot_all = Pivot(rl)
@@ -364,7 +364,7 @@ class Wallet:
             self.realized_profit_pivot_fii = Pivot(rl[rl[DataSchema.TYPE] == "FII"])
 
     def compute_portfolio(self):
-        today = dt.datetime.today().strftime("%Y-%m-%d")
+        today = dt.datetime.today().strftime(DataSchema.DATE_FORMAT)
         portfolio = Portfolio(
             self.prcReader, self.splReader, today, self.df, self.recommended_wallet, self.currency.symbol
         )
@@ -376,7 +376,7 @@ class Wallet:
             self.prcReader,
             self.splReader,
             self.df,
-            dt.datetime.today().strftime("%Y-%m-%d"),
+            dt.datetime.today().strftime(DataSchema.DATE_FORMAT),
             currency=self.currency.name,
         )
         snapshot = PerformanceViewer(p.calc())
@@ -407,7 +407,9 @@ class Wallet:
                 prov_month.groupby([DataSchema.SYMBOL, DataSchema.DATE])[self.currency.name].sum().reset_index()
             )
             prov_month.sort_values(DataSchema.DATE, inplace=True)
-            prov_month[DataSchema.DATE] = prov_month[DataSchema.DATE].apply(lambda x: x.strftime("%Y-%m-%d"))
+            prov_month[DataSchema.DATE] = prov_month[DataSchema.DATE].apply(
+                lambda x: x.strftime(DataSchema.DATE_FORMAT)
+            )
             prov_month.loc["Total", self.currency.name] = prov_month[self.currency.name].sum()
             prov_month[DataSchema.MONTH] = date.strftime("%B")
             self.prov_month = pd.concat([self.prov_month, prov_month.fillna(" ").reset_index(drop=True)])
@@ -415,7 +417,7 @@ class Wallet:
         if not self.prov_month.empty:
             self.prov_month.set_index([DataSchema.MONTH, DataSchema.SYMBOL], inplace=True)
 
-        prov = self.df[self.df[DataSchema.OPERATION].isin("D1 R1 JCP1 A1".split())]
+        prov = self.df[self.df[DataSchema.OPERATION].isin("D1 R1 JCP1 A1 T1".split())]
         if prov.empty:
             prov = self.df[self.df[DataSchema.OPERATION].isin("D R JCP A".split())]
 
@@ -431,13 +433,12 @@ class Wallet:
             )
             sorted_m = sorted(pvt.columns[:-1], key=lambda month: dt.datetime.strptime(month, "%B"))
             sorted_m.append(pvt.columns[-1])
-            self.pvt_div_table = (
-                pvt.reindex(sorted_m, axis=1)
-                .style.applymap(Color().color_negative_red)
-                .format(f"{self.currency.symbol} {{:,.2f}}")
-            )
+            pvt = pvt.reindex(sorted_m, axis=1)
+            self.pvt_div_table_raw = pvt
+
+            self.pvt_div_table = pvt.style.map(Color().color_negative_red).format(f"{self.currency.symbol} {{:,.2f}}")
         else:
-            self.pvt_div_table = pd.DataFrame()
+            self.pvt_div_table_raw = self.pvt_div_table = pd.DataFrame()
 
     def compute_history_snapshot(self, period="all"):
         startPlot = self.start_date
@@ -447,12 +448,12 @@ class Wallet:
             frequency = "W"
             wishedStart = dt.datetime.today() - pd.DateOffset(years=int(period.split(" ")[0]))
             if pd.to_datetime(startPlot) < pd.to_datetime(wishedStart):
-                startPlot = wishedStart.strftime("%Y-%m-%d")
+                startPlot = wishedStart.strftime(DataSchema.DATE_FORMAT)
 
         monthList = pd.date_range(start=startPlot, end=dt.datetime.today(), freq=frequency).format(
-            formatter=lambda x: x.strftime("%Y-%m-%d")
+            formatter=lambda x: x.strftime(DataSchema.DATE_FORMAT)
         )
-        monthList.append(dt.datetime.today().strftime("%Y-%m-%d"))
+        monthList.append(dt.datetime.today().strftime(DataSchema.DATE_FORMAT))
         performanceList = []
         if period.lower() == "all":
             performanceList.append([startPlot - pd.DateOffset(weeks=2), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
@@ -461,7 +462,7 @@ class Wallet:
             p = PerformanceSnapshot(self.prcReader, self.splReader, self.df, month).calc()
             performanceList.append(
                 [
-                    dt.datetime.strptime(p.date, "%Y-%m-%d"),
+                    dt.datetime.strptime(p.date, DataSchema.DATE_FORMAT),
                     p.equity,
                     p.cost,
                     p.realizedProfit,
