@@ -82,4 +82,4 @@ class PerformanceViewer:
         df = self.pf.copy(deep=True)
         df.loc[:, "%"] *= 100
         format_dict = {"USD": " {:^,.2f}", "BRL": " {:^,.2f}", "GBP": " {:^,.2f}", "%": " {:>.1f}%"}
-        return df.style.applymap(Color().color_negative_red).format(format_dict)
+        return df.style.map(Color().color_negative_red).format(format_dict)

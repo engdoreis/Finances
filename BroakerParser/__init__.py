@@ -10,6 +10,7 @@ from .ClearProventos import *
 from .OrdersReader import *
 from .TDAmeritrade import *
 from .Trading212 import *
+from .charles_schwab import *
 
 
 def to_float(str, decimal=",", thousand="."):

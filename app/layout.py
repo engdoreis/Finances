@@ -37,15 +37,17 @@ def home_tab(app: Dash, configs) -> html.Div:
         ],
     )
 
+
 def dividends_tab(app: Dash, configs) -> html.Div:
     return html.Div([html.H3("Tab 2 Content"), html.P("This is the content of Tab 2.")])
+
 
 def create_layout(app: Dash, configs) -> html.Div:
     # Define callback for updating the tab content
     @app.callback(Output(ids.TAB_CONTENT, "children"), Input(ids.APP_TABS, "value"))
     def render_content(selected_tab):
         return TABS[selected_tab]
-    
+
     TABS[ids.HOME_TAB] = home_tab(app, configs)
     TABS[ids.DIVIDENDS_TAB] = dividends_tab(app, configs)
     return html.Div(

@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 from data import DataSchema
 
-from BroakerParser import ClearDivStatement, ReadOrders, TDAmeritrade, Trading212
+from BroakerParser import ClearDivStatement, ReadOrders, TDAmeritrade, Trading212, CharlesChwab
 from FinanceTools import (
     Color,
     DividendReader,
@@ -36,9 +36,11 @@ class Broker(Enum):
     CLEAR = 1
     TDAMERITRADE = 2
     TRADING212 = 3
+    CHARLES_SCHWAB = 4
 
 
 currency_market_map = {
+    Broker.CHARLES_SCHWAB: Currency("USD", "$"),
     Broker.TDAMERITRADE: Currency("USD", "$"),
     Broker.CLEAR: Currency("BRL", "R$"),
     Broker.TRADING212: Currency("GBP", "£"),
@@ -80,6 +82,11 @@ class Wallet:
             broker = TDAmeritrade(csv)
             broker.read_statement(self.input.statement_dir)
             self.df = pd.read_csv(csv)
+        elif self.input.broker == Broker.CHARLES_SCHWAB:
+            csv = self.work_dir + "SCHWAB.csv"
+            broker = CharlesChwab(csv)
+            broker.read_statement(self.input.statement_dir)
+            self.df = pd.read_csv(csv)
         elif self.input.broker == Broker.TRADING212:
             csv = self.work_dir + "T212.csv"
             broker = Trading212(csv)
@@ -87,8 +94,7 @@ class Wallet:
             self.df = pd.read_csv(csv)
 
         DataSchema.assert_base_columns(self.df)
-        self.df = self.df.iloc[:, : len(DataSchema.base_columns())]
-        self.df.columns = DataSchema.base_columns()
+        self.df = self.df[DataSchema.base_columns()]
 
         # drop empty lines
         self.df = self.df[self.df[DataSchema.DATE].astype(bool)].dropna()
@@ -607,6 +613,11 @@ if __name__ == "__main__":
         broker=Broker.TDAMERITRADE,
         statement_dir=f"{root}/transactions_td_ameritrade",
         recommended_wallet=f"{root}/transactions_td_ameritrade/global_wallet.json",
+    )
+    config = Input(
+        broker=Broker.CHARLES_SCHWAB,
+        statement_dir=f"{root}/transactions_schwab",
+        recommended_wallet=f"{root}/transactions_schwab/global_wallet.json",
     )
 
     wallet = Wallet(root + "/wallet")

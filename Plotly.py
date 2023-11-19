@@ -22,9 +22,19 @@ def main() -> None:
             recommended_wallet=f"{root}/transactions_td_ameritrade/global_wallet.json",
         )
     )
+    wallet_cs = wl.Wallet(root + "/wallet")
+    wallet_cs.run(
+        wl.Input(
+            broker=wl.Broker.CHARLES_SCHWAB,
+            statement_dir=f"{root}/transactions_schwab",
+            recommended_wallet=f"{root}/transactions_schwab/global_wallet.json",
+        )
+    )
+
     configs = {
         "TDAmeritrade": wallet_td,
         "Trading212": wallet_t212,
+        "Schwab": wallet_cs,
     }
 
     app = Dash(external_stylesheets=[BOOTSTRAP])

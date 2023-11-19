@@ -27,8 +27,9 @@ class Portfolio:
             "DIVIDENDS",
             DataSchema.TYPE,
         ]
-        self.dtframe["COST"] = self.dtframe.PM * self.dtframe[DataSchema.QTY]
+
         self.dtframe = self.dtframe[self.dtframe[DataSchema.QTY] > 0]
+        self.dtframe["COST"] = self.dtframe[DataSchema.AVERAGE_PRICE] * self.dtframe[DataSchema.QTY]
         self.dtframe.reset_index(drop=True, inplace=True)
 
         self.dtframe = self.dtframe[self.dtframe[DataSchema.SYMBOL] != DataSchema.CASH]
@@ -102,6 +103,9 @@ class Portfolio:
     def extra_content(self, recommended):
         if recommended == None:
             return
+
+        if self.dtframe.empty:
+            raise Exception("Dataframe can not be empty")
 
         self.dtframe["TARGET"], self.dtframe["TOP_PRICE"], self.dtframe["PRIORITY"] = zip(
             *self.dtframe[DataSchema.SYMBOL].map(lambda x: self.recommended(recommended, x))
